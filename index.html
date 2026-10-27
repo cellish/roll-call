@@ -136,6 +136,13 @@ kbd{font:500 .72rem ui-monospace,Menlo,monospace;border:1px solid currentColor;b
 table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
 th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
 td.wrap-cell{white-space:normal;min-width:8em}
+th .sorth{appearance:none;border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;padding:2px 0;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+th.num .sorth{flex-direction:row}
+th .sorth:hover{color:var(--ink)}
+th .sorth.on{color:var(--accent)}
+th .sorth .arr{font-size:.7em;opacity:.55}
+th .sorth.on .arr{opacity:1}
+th .sorth:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 th{font-size:.78rem;color:var(--muted);font-weight:600;letter-spacing:.05em;background:var(--sunk)}
 tr:last-child td{border-bottom:0}
 td.num,th.num{text-align:right}
@@ -527,6 +534,27 @@ function summarize(c,recs){
   });
   return [...map.values()].sort((a,b)=>(a.sid||'').localeCompare(b.sid||'')||a.name.localeCompare(b.name,'ja'));
 }
+/* ---------- 並べ替え ---------- */
+const SORT_DEFAULT={list:{k:'ts',dir:-1},sum:{k:'sid',dir:1}};
+const NUMKEYS=new Set(['ts','points','grade','n','abs','late','pts','avg']);
+function sortState(t){const o=(S.opts.sort||{})[t];return o&&o.k?o:SORT_DEFAULT[t]}
+const gradeNum=g=>{const m=String(g||'').match(/\d/);if(!m)return null;let n=+m[0];if(/修士|^[Mm]/.test(g))n+=4;if(/博士|^[Dd]/.test(g))n+=6;return n};
+const jaCmp=(a,b)=>String(a).localeCompare(String(b),'ja',{numeric:true});
+function sortRows(rows,t,val){
+  const {k,dir}=sortState(t);
+  const tie=t==='list'?((a,b)=>b.ts.localeCompare(a.ts)):((a,b)=>jaCmp(a.sid||'',b.sid||''));
+  return rows.slice().sort((a,b)=>{
+    const x=val(a,k),y=val(b,k);
+    const ex=x==null||x==='',ey=y==null||y==='';
+    if(ex||ey){if(ex&&ey)return tie(a,b);return ex?1:-1}  // 空欄はいつも最後
+    const c=typeof x==='number'&&typeof y==='number'?x-y:jaCmp(x,y);
+    return c?c*dir:tie(a,b);
+  });
+}
+function sortTh(t,k,label,cls){
+  const st=sortState(t);const on=st.k===k;
+  return `<th${cls?` class="${cls}"`:''} aria-sort="${on?(st.dir>0?'ascending':'descending'):'none'}"><button class="sorth${on?' on':''}" data-a="sort" data-t="${t}" data-k="${esc(k)}">${esc(label)}<span class="arr">${on?(st.dir>0?'▲':'▼'):'↕'}</span></button></th>`;
+}
 function labelSet(recs){const l=S.grades.map(g=>g.label).filter(x=>x!=='済');recs.forEach(r=>{if(isCall(r)&&r.label!=='済'&&!l.includes(r.label))l.push(r.label)});return l}
 function viewRec(){
   const c=C();
@@ -540,16 +568,22 @@ function viewRec(){
   if(!c.records.length)return tools+`<div class="tbl-wrap"><p class="empty">まだ記録がありません。「指名」タブで指名して評価すると、日時とともにここに残ります。</p></div>`;
   if(ui.recView==='list'){
     const gmap=new Map(c.students.map(s=>[s.id,s.grade||'']));const gOf=r=>gmap.get(r.stu)||r.grade||'';const rg=recs.some(r=>gOf(r));
-    const rows=recs.slice().sort((a,b)=>b.ts.localeCompare(a.ts)).map(r=>`<tr>
+    const kmap=new Map(c.students.map(s=>[s.id,s.kana||'']));
+    const lval=(r,k)=>k==='ts'?r.ts:k==='sid'?r.sid:k==='grade'?gradeNum(gOf(r)):k==='name'?((r.kana||kmap.get(r.stu)||r.name)||''):
+      k==='label'?(r.absent?-3:r.late?-2:(typeof r.points==='number'?r.points:-1)):k==='points'?(typeof r.points==='number'?r.points:null):k==='memo'?(r.memo||''):null;
+    const rows=sortRows(recs,'list',lval).map(r=>`<tr>
       <td>${dayLabel(dayKey(r.ts))} ${r.pre?'<span class="muted small">事前</span>':timeStr(r.ts).slice(0,5)}</td><td>${esc(r.sid)}</td>${rg?`<td>${esc(fmtGrade(gOf(r)))}</td>`:''}<td>${esc(r.name)}</td>
       <td>${r.absent?'<span class="pill absent">欠席</span>':r.late?'<span class="pill late">遅刻</span>':`<span class="pill">${esc(r.label)}</span>`}</td>
       <td class="num">${r.points??''}</td><td class="wrap-cell">${esc(r.memo)}</td>
       <td><button class="btn small" data-a="editRow" data-id="${r.id}">修正</button></td></tr>`).join('');
-    return tools+`<div class="tbl-wrap"><table><thead><tr><th>日時</th><th>学籍番号</th>${rg?'<th>学年</th>':''}<th>氏名</th><th>評価</th><th class="num">点</th><th>メモ</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return tools+`<div class="tbl-wrap"><table><thead><tr>${sortTh('list','ts','日時')}${sortTh('list','sid','学籍番号')}${rg?sortTh('list','grade','学年'):''}${sortTh('list','name','氏名')}${sortTh('list','label','評価')}${sortTh('list','points','点','num')}${sortTh('list','memo','メモ')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
-  const labels=labelSet(recs);const sum=summarize(c,recs);const sg=anyGrade(sum);
+  const labels=labelSet(recs);const sum0=summarize(c,recs);const sg=anyGrade(sum0);
+  const sval=(m,k)=>k==='sid'?m.sid:k==='grade'?gradeNum(m.grade):k==='name'?(m.kana||m.name):k==='n'?m.n:k==='abs'?m.abs:k==='late'?(m.late||0):
+    k==='pts'?(m.np?m.pts:null):k==='avg'?(m.np?m.pts/m.np:null):k.startsWith('L:')?(m.counts[k.slice(2)]||0):null;
+  const sum=sortRows(sum0,'sum',sval);
   const rows=sum.map(m=>`<tr><td>${esc(m.sid)}</td>${sg?`<td>${esc(fmtGrade(m.grade))}</td>`:''}<td>${esc(m.name)}</td><td class="num">${m.n}</td><td class="num">${m.abs||''}</td><td class="num">${m.late||''}</td>${labels.map(l=>`<td class="num">${m.counts[l]||''}</td>`).join('')}<td class="num">${m.np?m.pts:''}</td><td class="num">${m.np?(m.pts/m.np).toFixed(2):''}</td></tr>`).join('');
-  return tools+`<div class="tbl-wrap"><table><thead><tr><th>学籍番号</th>${sg?'<th>学年</th>':''}<th>氏名</th><th class="num">指名</th><th class="num">欠席</th><th class="num">遅刻</th>${labels.map(l=>`<th class="num">${esc(l)}</th>`).join('')}<th class="num">合計点</th><th class="num">平均</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return tools+`<div class="tbl-wrap"><table><thead><tr>${sortTh('sum','sid','学籍番号')}${sg?sortTh('sum','grade','学年'):''}${sortTh('sum','name','氏名')}${sortTh('sum','n','指名','num')}${sortTh('sum','abs','欠席','num')}${sortTh('sum','late','遅刻','num')}${labels.map(l=>sortTh('sum','L:'+l,l,'num')).join('')}${sortTh('sum','pts','合計点','num')}${sortTh('sum','avg','平均','num')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function viewRoster(){
   const c=C();const d=ui.draft;
@@ -688,6 +722,9 @@ main.addEventListener('click',async e=>{
     case 'delRec':confirmModal('この記録を取り消しますか','取り消すと、この学生は未評価の状態に戻ります。','取り消す',()=>{c.records=c.records.filter(r=>r.id!==ui.editRec);tombRec(c,ui.editRec);ui.editRec=null;ui.lastRec=null;ui.phase='called';save();render();toast('記録を取り消しました')});break;
     case 'goRoster':ui.tab='roster';render();break;
     case 'view':ui.recView=b.dataset.v;render();break;
+    case 'sort':{const t=b.dataset.t,k=b.dataset.k;const cur=sortState(t);
+      const dir=cur.k===k?-cur.dir:((NUMKEYS.has(k)||k.startsWith('L:'))&&k!=='grade'?-1:1);
+      S.opts.sort=Object.assign({},S.opts.sort||{},{[t]:{k,dir}});save({silent:true});render();break}
     case 'editRow':editRowModal(b.dataset.id);break;
     case 'expRec':{
       const recs=filteredRecs(c).sort((x,y)=>x.ts.localeCompare(y.ts));

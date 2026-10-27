@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="指名帳">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>指名帳</title>
+<style>
+/* Layout: one narrow column (roll-book page) with a sticky header + tabs; the calling stage is the centre of the page. */
+:root{
+  --paper:#f2f4f1; --surface:#ffffff; --sunk:#e8ebe6;
+  --ink:#1b2231; --muted:#5d6574; --line:#d6dad2;
+  --accent:#2b3d8c; --accent-ink:#ffffff; --accent-soft:#e3e7f6;
+  --seal:#c23e27; --seal-soft:#f8e5e0;
+  --absent:#8a5800; --absent-soft:#f6ecd9;
+  --late:#1f6b5c; --late-soft:#dcefe9;
+  --f-ui:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic","Meiryo",sans-serif;
+  --f-name:"Hiragino Mincho ProN","Hiragino Mincho Pro","Yu Mincho","YuMincho","Noto Serif JP",serif;
+  --r:10px;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#12151b; --surface:#1b1f27; --sunk:#232834;
+  --ink:#e7e9ef; --muted:#9aa1af; --line:#2e3441;
+  --accent:#93a5f2; --accent-ink:#10152b; --accent-soft:#252c47;
+  --seal:#ef7b63; --seal-soft:#3a2420;
+  --absent:#e2b45a; --absent-soft:#352a17;
+  --late:#6fd0b8; --late-soft:#17332d;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#12151b; --surface:#1b1f27; --sunk:#232834;
+  --ink:#e7e9ef; --muted:#9aa1af; --line:#2e3441;
+  --accent:#93a5f2; --accent-ink:#10152b; --accent-soft:#252c47;
+  --seal:#ef7b63; --seal-soft:#3a2420;
+  --absent:#e2b45a; --absent-soft:#352a17;
+  --late:#6fd0b8; --late-soft:#17332d;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.6 var(--f-ui);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+[hidden]{display:none!important}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;gap:12px;padding-block:10px 6px;flex-wrap:wrap}
+.top h1{margin:0;font:600 1.25rem/1 var(--f-name);letter-spacing:.12em}
+.course-pick{margin-left:auto;min-width:0;flex:0 1 320px}
+.course-pick select{width:100%}
+.tabs{display:flex;gap:4px;padding-block:0}
+.tabs button{flex:1;appearance:none;border:0;background:none;color:var(--muted);font:600 .95rem var(--f-ui);padding:10px 4px 9px;border-bottom:3px solid transparent;cursor:pointer;letter-spacing:.08em}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+main{padding-block:20px 48px}
+.sbar{background:var(--absent-soft);color:var(--ink);border-bottom:1px solid var(--line)}
+.sbar-in{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-block:8px;font-size:.9rem}
+.sbar-in span{flex:1 1 240px}
+.banner{background:var(--seal-soft);color:var(--seal);padding:10px 16px;font-size:.9rem;text-align:center}
+
+/* controls */
+select,input[type=text],input[type=password],textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;max-width:100%}
+textarea{width:100%;font:14px/1.5 ui-monospace,"SF Mono",Menlo,monospace;resize:vertical}
+input[type=text],input[type=password]{width:100%}
+input[type=date]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 .95rem var(--f-ui);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 16px;cursor:pointer;min-height:44px;text-decoration:none}
+.btn:hover{border-color:var(--muted)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--seal);border-color:var(--seal)}
+.btn.danger.armed{background:var(--seal);color:var(--surface)}
+.btn.small{min-height:34px;padding:5px 12px;font-size:.85rem}
+.btn.big{font-size:1.35rem;padding:18px 48px;min-height:68px;border-radius:14px;letter-spacing:.15em}
+.link{appearance:none;background:none;border:0;color:var(--muted);font:inherit;text-decoration:underline;cursor:pointer;padding:8px}
+kbd{font:500 .72rem ui-monospace,Menlo,monospace;border:1px solid currentColor;border-radius:4px;padding:0 5px;opacity:.6}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:12px}
+.stack{display:grid;gap:16px}
+.card h3{margin:0;font-size:1rem;letter-spacing:.05em}
+.card p{margin:0}
+
+/* calling stage */
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px 20px 24px;display:grid;justify-items:center;gap:14px;text-align:center}
+.eyebrow{margin:0;font-size:.8rem;letter-spacing:.14em;color:var(--muted)}
+.poolnum{display:flex;align-items:baseline;gap:8px;font-variant-numeric:tabular-nums}
+.poolnum b{font:600 3rem/1 var(--f-name)}
+.sid{margin:0;font:500 1rem ui-monospace,"SF Mono",Menlo,monospace;color:var(--muted);letter-spacing:.08em;min-height:1.4em}
+.sid .grade{margin-left:.9em;padding-left:.9em;border-left:1px solid var(--line);font-family:var(--f-ui);letter-spacing:.04em}
+.namebox{display:grid;gap:2px;justify-items:center}
+.kana{margin:0;font-size:clamp(.95rem,3.4vw,1.25rem);color:var(--muted);letter-spacing:.22em;min-height:1.5em}
+.name{margin:0;font:600 clamp(2.4rem,11vw,4.6rem)/1.15 var(--f-name);letter-spacing:.06em;text-wrap:balance;word-break:keep-all;overflow-wrap:anywhere}
+.name.spin{color:var(--muted)}
+.name.sm{font-size:clamp(1.7rem,7vw,2.6rem)}
+.hist{margin:0;font-size:.85rem;color:var(--muted)}
+.grades{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px;width:100%;max-width:560px}
+.grades.one{grid-template-columns:1fr}
+.grades.one .gl{font-size:1.5rem;letter-spacing:.2em}
+.wrapseg{flex-wrap:wrap;display:flex;width:fit-content;max-width:100%}
+.gbtn{appearance:none;border:1.5px solid var(--accent);background:var(--surface);color:var(--accent);border-radius:14px;min-height:76px;display:grid;place-items:center;gap:0;cursor:pointer;font-family:var(--f-name);padding:6px}
+.gbtn .gl{font-size:1.9rem;line-height:1.1;font-weight:600}
+.gbtn .gp{font:500 .75rem var(--f-ui);opacity:.75}
+.gbtn:hover{background:var(--accent-soft)}
+.gbtn.current{background:var(--accent);color:var(--accent-ink)}
+.gbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gbtn:disabled{opacity:.4;cursor:default}
+.abtn{appearance:none;border:1.5px solid var(--absent);background:var(--absent-soft);color:var(--absent);border-radius:14px;min-height:52px;width:100%;max-width:560px;font:700 1.05rem var(--f-ui);letter-spacing:.2em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.abtn.current{background:var(--absent);color:var(--surface)}
+.abtn:disabled{opacity:.4}
+.memo{width:100%;max-width:560px;text-align:left;display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+.editing{background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:4px 14px;font-size:.85rem;font-weight:600}
+.notice{background:var(--sunk);border-radius:12px;padding:14px 16px;max-width:520px}
+
+/* seal */
+.seal{width:118px;height:118px;border-radius:50%;border:4px solid var(--seal);color:var(--seal);display:grid;place-items:center;font:700 2.6rem/1 var(--f-name);transform:rotate(-8deg);background:var(--seal-soft);animation:stamp .28s ease-out both}
+.seal.long{font-size:1.5rem;letter-spacing:.05em}
+.seal.absent{border-color:var(--absent);color:var(--absent);background:var(--absent-soft);font-size:1.9rem}
+@keyframes stamp{from{transform:rotate(-8deg) scale(1.5);opacity:0}to{transform:rotate(-8deg) scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.seal{animation:none}}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
+td.wrap-cell{white-space:normal;min-width:8em}
+th{font-size:.78rem;color:var(--muted);font-weight:600;letter-spacing:.05em;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+.pill{display:inline-block;min-width:2em;text-align:center;border-radius:999px;padding:1px 8px;font-weight:700;background:var(--accent-soft);color:var(--accent);font-family:var(--f-name)}
+.pill.late{background:var(--late-soft);color:var(--late);font-family:var(--f-ui);font-size:.82rem}
+.pill.none{background:none;color:var(--muted);font-family:var(--f-ui);font-size:.82rem;font-weight:500}
+.pill.absent{background:var(--absent-soft);color:var(--absent);font-family:var(--f-ui);font-size:.82rem}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{appearance:none;border:0;background:var(--surface);color:var(--muted);font:600 .88rem var(--f-ui);padding:8px 14px;cursor:pointer;min-height:40px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+
+/* modal + toast */
+.modal{position:fixed;inset:0;z-index:20;background:rgba(10,14,24,.45);display:grid;place-items:center;padding:16px}
+.modal-card{background:var(--surface);color:var(--ink);border-radius:16px;padding:20px;width:min(520px,100%);max-height:90vh;overflow:auto;display:grid;gap:12px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal-card h3{margin:0}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:999px;font-size:.9rem;z-index:30;max-width:calc(100% - 32px)}
+.field{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+.field > *{color:var(--ink)}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:.92rem}
+.check input{margin-top:5px}
+@media (max-width:480px){.btn.big{padding:16px 32px;width:100%}.top h1{font-size:1.1rem}.course-pick{flex-basis:100%}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <h1>指名帳</h1>
+    <label class="course-pick"><span class="sr">講義</span><select id="courseSel"></select></label>
+  </div>
+  <nav class="wrap tabs" role="tablist">
+    <button role="tab" data-tab="call">指名</button>
+    <button role="tab" data-tab="rec">記録</button>
+    <button role="tab" data-tab="roster">名簿</button>
+    <button role="tab" data-tab="set">設定</button>
+  </nav>
+</header>
+<div id="storeWarn" class="banner" hidden>このブラウザでは記録を保存できません（プライベートブラウズ中など）。閉じる前に記録をCSVで書き出してください。</div>
+<div id="statusBar" class="sbar" hidden></div>
+<main class="wrap" id="main"></main>
+<div id="modal" class="modal" hidden><div class="modal-card" id="modalCard" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+'use strict';
+const KEY='shimeicho.v1';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const pad=n=>String(n).padStart(2,'0');
+const dayKey=d=>{d=new Date(d);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const timeStr=d=>{d=new Date(d);return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())};
+const WD='日月火水木金土';
+const dayLabel=k=>{const [y,m,d]=k.split('-').map(Number);const dt=new Date(y,m-1,d);return `${m}/${d}（${WD[dt.getDay()]}）`};
+const today=()=>dayKey(new Date());
+const reduceMotion=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=()=>{try{return crypto.getRandomValues(new Uint32Array(1))[0]/4294967296}catch(e){return Math.random()}};
+
+/* 評価の段階：評価なし・2〜5段階・自由に設定 */
+const SCALES={
+  none:{name:'評価なし',g:[{label:'済',points:null}]},
+  '2':{name:'2段階',g:[{label:'○',points:1},{label:'×',points:0}]},
+  '3':{name:'3段階',g:[{label:'○',points:2},{label:'△',points:1},{label:'×',points:0}]},
+  '4':{name:'4段階',g:[{label:'◎',points:3},{label:'○',points:2},{label:'△',points:1},{label:'×',points:0}]},
+  '5':{name:'5段階',g:[{label:'5',points:5},{label:'4',points:4},{label:'3',points:3},{label:'2',points:2},{label:'1',points:1}]}
+};
+const PASS={label:'パス',points:null};
+const scaleGrades=(k,pass)=>{const g=SCALES[k].g.map(x=>({...x}));if(pass&&k!=='none')g.push({...PASS});return g};
+const DEFAULT_GRADES=scaleGrades('4',true);
+const sameGrades=(a,b)=>a.length===b.length&&a.every((x,i)=>x.label===b[i].label&&x.points===b[i].points);
+function detectScale(gs){for(const k of Object.keys(SCALES))for(const p of [true,false])if(sameGrades(gs,scaleGrades(k,p)))return {scale:k,pass:k==='none'?false:p};return {scale:'custom',pass:false}}
+
+function sampleCourse(){
+  const names=[['青木 遥','あおき はるか'],['石田 蒼','いしだ あおい'],['上野 美咲','うえの みさき'],['岡本 大輝','おかもと だいき'],['加藤 結衣','かとう ゆい'],['木村 陸','きむら りく'],['小林 葵','こばやし あおい'],['佐々木 悠真','ささき ゆうま']];
+  return {id:uid(),name:'サンプル講義（例の名簿）',students:names.map(([n,k],i)=>({id:uid(),sid:'EX'+String(i+1).padStart(4,'0'),name:n,kana:k})),records:[]};
+}
+const DEFAULT_OPTS={scale:'4',pass:true,skipCalled:true,mode:'all',anim:true,promptOnStop:true,remindDays:3,autoEnc:false};
+function fresh(){const c=sampleCourse();return {v:1,courses:[c],cur:c.id,grades:DEFAULT_GRADES.map(g=>({...g})),opts:{...DEFAULT_OPTS}}}
+
+let S, storeOK=true;
+function load(){
+  try{const raw=localStorage.getItem(KEY);S=raw?JSON.parse(raw):fresh()}catch(e){S=fresh();storeOK=false}
+  if(!Array.isArray(S.courses))S=fresh();
+  if(!S.courses.length){const c={id:uid(),name:'新しい講義',students:[],records:[]};S.courses.push(c);S.cur=c.id}
+  if(!Array.isArray(S.grades)||!S.grades.length)S.grades=DEFAULT_GRADES.map(g=>({...g}));
+  if(!S.opts||!S.opts.scale)S.opts=Object.assign({},S.opts||{},detectScale(S.grades));
+  S.opts=Object.assign({...DEFAULT_OPTS},S.opts||{});
+  ensureShape();
+}
+let snapT;
+function save(o){
+  const silent=!!(o&&o.silent);
+  if(!silent)S.changedAt=new Date().toISOString();
+  try{localStorage.setItem(KEY,JSON.stringify(S));storeOK=true}catch(e){storeOK=false}
+  $('#storeWarn').hidden=storeOK;
+  clearTimeout(snapT);snapT=setTimeout(()=>snapshot('day'),3000);
+  if(!silent)scheduleAuto();
+  updateStatusBar();
+}
+const C=()=>S.courses.find(c=>c.id===S.cur)||S.courses[0];
+
+const ui={tab:'call',phase:'idle',pick:null,editRec:null,lastRec:null,ignoreCalled:false,animating:false,recDate:'all',recView:'list',draft:null,mode:'replace'};
+
+/* ---------- toast / modal ---------- */
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
+function openModal(html,mount){const card=$('#modalCard');card.innerHTML=html;$('#modal').hidden=false;card.querySelectorAll('[data-m="close"]').forEach(b=>b.onclick=closeModal);if(mount)mount(card);const f=card.querySelector('input,select,textarea,button');if(f)f.focus()}
+function closeModal(){$('#modal').hidden=true;$('#modalCard').innerHTML=''}
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden)closeModal()});
+function armButton(btn,armedText,fn){btn.addEventListener('click',()=>{if(btn.classList.contains('armed')){fn()}else{btn.classList.add('armed');btn.dataset.orig=btn.textContent;btn.textContent=armedText;setTimeout(()=>{if(btn.isConnected){btn.classList.remove('armed');btn.textContent=btn.dataset.orig}},4000)}})}
+function confirmModal(title,body,okText,fn){
+  openModal(`<h3>${esc(title)}</h3><p class="muted">${body}</p><div class="row"><button class="btn danger armed" id="mOk">${esc(okText)}</button><button class="btn" data-m="close">やめる</button></div>`,card=>{card.querySelector('#mOk').onclick=()=>{closeModal();fn()}});
+}
+
+/* ---------- CSV ---------- */
+const csvCell=v=>{v=v==null?'':String(v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const toCSV=rows=>rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
+function parseTable(text){
+  text=text.replace(/^﻿/,'');
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  const first=lines[0]||'';
+  const d=first.includes('\t')?'\t':(first.includes(',')?',':null);
+  if(!d){
+    // 「12345678 山口 太郎」のような空白区切りにも対応
+    return lines.map(l=>{l=l.trim();const m=l.match(/^([A-Za-z]{0,3}\d{4,}[A-Za-z]?)\s+(.+)$/);return m?[m[1],m[2]]:[l]});
+  }
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){if(ch==='"'){if(text[i+1]==='"'){cell+='"';i++}else q=false}else cell+=ch}
+    else if(ch==='"'&&cell==='')q=true;
+    else if(ch===d){row.push(cell);cell=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell=''}
+    else cell+=ch;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row)}
+  return rows.map(r=>r.map(c=>c.trim())).filter(r=>r.some(c=>c));
+}
+const SIDRE=/^[A-Za-z]{0,3}\d{4,}[A-Za-z]?$/;
+const GRADERE=/^([1-6]|[1-6]年[次生]?|[BMDbmd][1-6]|学部[1-6]年?[次生]?|修士[1-2]年?[次生]?|博士[1-3]年?[次生]?)$/;
+/* 学年：数字だけなら「2年」と表示。入力がなければ何も出さない */
+const fmtGrade=g=>{g=String(g??'').trim();return /^[1-6]$/.test(g)?g+'年':g};
+const anyGrade=list=>list.some(x=>x&&String(x.grade??'').trim());
+const sidLine=s=>esc(s.sid)+(fmtGrade(s.grade)?`<span class="grade">${esc(fmtGrade(s.grade))}</span>`:'');
+function guessCols(rows){
+  const head=rows[0]||[];
+  const ncol=Math.max(1,...rows.map(r=>r.length));
+  const isHead=rows.length>1&&head.some(h=>/学籍|番号|氏名|名前|学生|ID|name|^No/i.test(h))&&!head.some(h=>SIDRE.test(h));
+  const body=isHead?rows.slice(1):rows;
+  let sidCol=-1,nameCol=-1,kanaCol=-1,gradeCol=-1;
+  const KANAH=/カナ|かな|フリガナ|ふりがな|kana|ヨミ|よみ/i;
+  if(isHead){
+    sidCol=head.findIndex(h=>/学籍|学生番号|学生ID|student.?(id|no)/i.test(h));
+    if(sidCol<0)sidCol=head.findIndex(h=>/番号|^ID$|^No/i.test(h));
+    nameCol=head.findIndex(h=>/氏名|名前|^name$|full.?name/i.test(h)&&!KANAH.test(h)&&!/ローマ|英/.test(h));
+    kanaCol=head.findIndex(h=>KANAH.test(h)&&!/ローマ|英/.test(h));
+    gradeCol=head.findIndex(h=>/学年|年次|^grade$|^year$/i.test(h));
+  }
+  const share=(j,test)=>{const v=body.map(r=>r[j]||'').filter(Boolean);return v.length?v.filter(test).length/v.length:0};
+  const isKana=x=>/^[぀-ゟ゠-ヿｦ-ﾟ\s　・ー]+$/.test(x);
+  if(sidCol<0){for(let j=0;j<ncol;j++){if(j===gradeCol)continue;if(share(j,x=>SIDRE.test(x))>.8){sidCol=j;break}}}
+  if(gradeCol<0){for(let j=0;j<ncol;j++){if(j===sidCol)continue;if(share(j,x=>GRADERE.test(x))>.9){gradeCol=j;break}}}
+  if(nameCol<0){for(let j=0;j<ncol;j++){if(j===sidCol||j===kanaCol||j===gradeCol)continue;if(share(j,x=>!/^\d+$/.test(x)&&!isKana(x)&&!GRADERE.test(x))>.8){nameCol=j;break}}}
+  if(nameCol<0){for(let j=0;j<ncol;j++){if(j===sidCol||j===kanaCol||j===gradeCol)continue;if(share(j,x=>!/^\d+$/.test(x)&&!GRADERE.test(x))>.8){nameCol=j;break}}}
+  if(kanaCol<0){for(let j=0;j<ncol;j++){if(j===sidCol||j===nameCol||j===gradeCol)continue;if(share(j,isKana)>.8){kanaCol=j;break}}}
+  return {rows,isHead,sidCol,nameCol,kanaCol,gradeCol,ncol};
+}
+function draftList(d){
+  const body=d.isHead?d.rows.slice(1):d.rows;
+  const g=j=>r=>j>=0?(r[j]||''):'';
+  return body.map(r=>({sid:g(d.sidCol)(r),name:g(d.nameCol)(r),kana:g(d.kanaCol)(r),grade:g(d.gradeCol)(r)}))
+    .filter(x=>x.sid||x.name).map(x=>({sid:x.sid,name:x.name||x.sid,kana:x.kana,grade:x.grade}));
+}
+async function readFileText(f){
+  const buf=await f.arrayBuffer();
+  try{return new TextDecoder('utf-8',{fatal:true}).decode(buf)}
+  catch(e){try{return new TextDecoder('shift_jis').decode(buf)}catch(e2){return new TextDecoder().decode(buf)}}
+}
+function download(name,text,mime){
+  try{
+    const blob=new Blob([text],{type:mime});const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);toast(name+' を保存しました');
+  }catch(e){toast('保存できませんでした。「コピー」を使ってください')}
+}
+/* 表の先頭に書き込む設定の説明 */
+function scaleText(){
+  const k=S.opts.scale;
+  const list=S.grades.map(g=>`${g.label}=${g.points==null?'点数なし':g.points+'点'}`).join(' ');
+  return k==='none'?'評価なし（指名のみ記録）':`${k==='custom'?'自由に設定':SCALES[k].name}（${list}）`;
+}
+function settingsRows(c,range){
+  return [['【設定】'],['講義',c.name],['期間',range],['出力日時',`${dayKey(new Date())} ${timeStr(new Date())}`],
+    ['評価の段階',scaleText()],
+    ['指名のしかた',S.opts.mode==='least'?'指名回数（欠席を除く）がいちばん少ない人から選ぶ':'全履修者から選ぶ'],
+    ['今日指名した人',S.opts.skipCalled?'出席者全員が終わるまで選ばない':'続けて選ぶことがある'],
+    ['欠席者','その日は指名しない'],[],['【記録】']];
+}
+function exportModal(title,filename,text,isCSV,withSettings){
+  const textOf=on=>withSettings&&on?withSettings+'\r\n'+text:text;
+  const on0=S.opts.csvSettings!==false;
+  openModal(`<h3>${esc(title)}</h3><p class="muted small">${esc(filename)}</p>
+  ${withSettings?`<label class="check small"><input type="checkbox" id="expSet"${on0?' checked':''}>先頭に設定（評価の段階・指名のしかた など）を書き込む</label>`:''}
+  <textarea id="expText" rows="8" readonly>${esc(textOf(on0))}</textarea>
+  <div class="row"><button class="btn primary" id="mDl">ファイルに保存</button><button class="btn" id="mCopy">コピー</button><button class="btn" data-m="close">閉じる</button></div>`,card=>{
+    const cb=card.querySelector('#expSet');
+    if(cb)cb.onchange=()=>{S.opts.csvSettings=cb.checked;save({silent:true});text0=textOf(cb.checked);card.querySelector('#expText').value=text0};
+    let text0=textOf(on0);
+    const cur=()=>text0;
+    card.querySelector('#mDl').onclick=()=>download(filename,(isCSV?'﻿':'')+cur(),isCSV?'text/csv;charset=utf-8':'application/json');
+    card.querySelector('#mCopy').onclick=()=>{const ta=card.querySelector('#expText');
+      const fb=()=>{ta.focus();ta.select();toast('選択しました。⌘C でコピーしてください')};
+      try{navigator.clipboard.writeText(cur()).then(()=>toast('コピーしました'),fb)}catch(e){fb()}};
+  });
+}
+const stamp=()=>{const d=new Date();return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())};
+const safeName=s=>s.replace(/[\\/:*?"<>|\s]+/g,'_');
+
+/* ---------- picking logic ---------- */
+/* 記録の種類：指名（評価）／欠席／遅刻。欠席・遅刻は「出欠」の記録 */
+const isCall=r=>!r.absent&&!r.late;
+const isAtt=r=>!!(r.absent||r.late);
+function attOn(c,stuId,day){
+  const rs=c.records.filter(r=>r.stu===stuId&&isAtt(r)&&dayKey(r.ts)===day);
+  return rs.length?rs.reduce((a,b)=>a.ts>b.ts?a:b):null;
+}
+function absentOn(c,day){const m=new Map();c.records.filter(r=>isAtt(r)&&dayKey(r.ts)===day).sort((a,b)=>a.ts.localeCompare(b.ts)).forEach(r=>m.set(r.stu,r.absent));return new Set([...m].filter(([,a])=>a).map(([k])=>k))}
+function calledOn(c,day){return new Set(c.records.filter(r=>isCall(r)&&dayKey(r.ts)===day).map(r=>r.stu))}
+function todayDone(c){const t=today();const a=absentOn(c,t);calledOn(c,t).forEach(x=>a.add(x));return a}
+function callCounts(c){const m=new Map();c.records.forEach(r=>{if(isCall(r))m.set(r.stu,(m.get(r.stu)||0)+1)});return m}
+function setAtt(c,s,day,status){
+  const removed=c.records.filter(r=>r.stu===s.id&&isAtt(r)&&dayKey(r.ts)===day);
+  c.records=c.records.filter(r=>!removed.includes(r));removed.forEach(r=>tombRec(c,r.id));
+  if(status){
+    const [y,m,d]=day.split('-').map(Number);
+    const isToday=day===today();
+    const ts=isToday?new Date():new Date(y,m-1,d,0,0,0);
+    const wasCalledAbsent=removed.some(r=>r.absent&&!r.src);
+    c.records.push({id:uid(),ts:ts.toISOString(),stu:s.id,sid:s.sid,name:s.name,kana:s.kana||'',grade:s.grade||'',label:status==='absent'?'欠席':'遅刻',points:null,absent:status==='absent',late:status==='late',memo:status==='late'&&wasCalledAbsent?'指名時は不在':'',src:'roster',pre:!isToday,updated:nowISO()});
+  }
+  save();
+}
+function eligible(c){
+  const t=today();
+  const abs=absentOn(c,t);
+  let base=c.students.filter(s=>!abs.has(s.id)); // 今日欠席の人は、どの設定でも選ばない
+  if(S.opts.skipCalled&&!ui.ignoreCalled){const done=calledOn(c,t);base=base.filter(s=>!done.has(s.id))}
+  if(S.opts.mode==='least'&&base.length){
+    const m=callCounts(c);const min=Math.min(...base.map(s=>m.get(s.id)||0));
+    base=base.filter(s=>(m.get(s.id)||0)===min);base.minCount=min;
+  }
+  return base;
+}
+function notYetToday(c){const done=todayDone(c);return c.students.filter(s=>!done.has(s.id)).length}
+let spinT;
+function pick(all){
+  if(ui.animating)return;
+  const c=C();if(all)ui.ignoreCalled=true;
+  const pool=eligible(c);
+  if(!pool.length){ui.phase='idle';render();return}
+  let cand=pool;if(pool.length>1&&ui.pick)cand=pool.filter(s=>s.id!==ui.pick);
+  const s=cand[Math.floor(rand()*cand.length)];
+  ui.pick=s.id;ui.editRec=null;ui.phase='called';
+  if(!S.opts.anim||reduceMotion||c.students.length<2){render();return}
+  ui.animating=true;render();
+  const nameEl=$('#nameEl'),sidEl=$('#sidEl'),kanaEl=$('#kanaEl');let n=0;
+  clearInterval(spinT);
+  spinT=setInterval(()=>{
+    const r=c.students[Math.floor(rand()*c.students.length)];
+    if(nameEl){nameEl.textContent=r.name}if(sidEl){sidEl.innerHTML=sidLine(r)}if(kanaEl){kanaEl.textContent=r.kana||''}
+    if(++n>=11){clearInterval(spinT);ui.animating=false;render()}
+  },55);
+}
+function record(i){
+  if(ui.animating)return;
+  const c=C();
+  const absent=i==='absent';
+  const g=absent?{label:'欠席',points:null}:S.grades[i];
+  if(!g)return;
+  const memo=(($('#memo')||{}).value||'').trim();
+  if(ui.editRec){
+    const r=c.records.find(r=>r.id===ui.editRec);
+    if(r)Object.assign(r,{label:g.label,points:g.points,absent,late:false,memo,edited:new Date().toISOString(),updated:nowISO()});
+    ui.lastRec=ui.editRec;
+  }else{
+    const s=c.students.find(x=>x.id===ui.pick);if(!s)return;
+    const r={id:uid(),ts:new Date().toISOString(),stu:s.id,sid:s.sid,name:s.name,kana:s.kana||'',grade:s.grade||'',label:g.label,points:g.points,absent,memo,updated:nowISO()};
+    c.records.push(r);ui.lastRec=r.id;
+  }
+  ui.editRec=null;ui.phase='confirm';save();render();
+}
+function stats(c,stuId){
+  const rs=c.records.filter(r=>r.stu===stuId);
+  const calls=rs.filter(isCall);
+  return {n:calls.length,abs:rs.filter(r=>r.absent).length,late:rs.filter(r=>r.late).length,last:calls[calls.length-1]};
+}
+
+/* ---------- render ---------- */
+function render(){
+  const sel=$('#courseSel');
+  sel.innerHTML=S.courses.map(c=>`<option value="${c.id}"${c.id===C().id?' selected':''}>${esc(c.name)}（${c.students.length}名）</option>`).join('');
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===ui.tab));
+  $('#storeWarn').hidden=storeOK;
+  const m=$('#main');
+  if(ui.tab==='call')m.innerHTML=viewCall();
+  else if(ui.tab==='rec')m.innerHTML=viewRec();
+  else if(ui.tab==='roster')m.innerHTML=viewRoster();
+  else m.innerHTML=viewSet();
+  if(ui.tab==='call'&&ui.phase==='called'&&ui.editRec){
+    const r=C().records.find(r=>r.id===ui.editRec);const mm=$('#memo');if(r&&mm)mm.value=r.memo||'';
+  }
+}
+function viewCall(){
+  const c=C();const total=c.students.length;
+  if(!total)return `<div class="stage"><p class="eyebrow">${esc(c.name)}</p><p>この講義にはまだ履修者が登録されていません。</p><button class="btn primary" data-a="goRoster">名簿を登録する</button></div>`;
+  const t=today();const todays=c.records.filter(r=>dayKey(r.ts)===t);
+  const nAbs=absentOn(c,t).size,nLate=todays.filter(r=>r.late).length;
+  const todayLine=`今日の指名 ${todays.filter(isCall).length}件${nAbs?` ・ 欠席 ${nAbs}名`:''}${nLate?` ・ 遅刻 ${nLate}名`:''}`;
+  if(ui.phase==='idle'){
+    const pool=eligible(c).length;
+    if(!pool){
+      const present=c.students.filter(s=>!absentOn(c,t).has(s.id)).length;
+      if(!present)return `<div class="stage"><p class="eyebrow">${esc(c.name)}</p><div class="notice"><b>今日は全員が欠席として登録されています。</b><br><span class="small muted">「名簿」タブで欠席を解除できます。</span></div></div>`;
+      return `<div class="stage"><p class="eyebrow">${esc(c.name)}</p>
+      <div class="notice"><b>今日は出席者全員を指名しました。</b><br><span class="small muted">もう一巡させることもできます（欠席者は選ばれません）。</span></div>
+      <button class="btn primary" data-a="pickAll">出席者全員から選ぶ</button><p class="hist">${todayLine}</p></div>`;
+    }
+    const pl=eligible(c);
+    const why=S.opts.mode==='least'?`（指名回数がいちばん少ない ${pl.minCount}回の人${S.opts.skipCalled&&!ui.ignoreCalled?'・今日未指名':''}・欠席者を除く）`:(S.opts.skipCalled&&!ui.ignoreCalled?'（今日まだ指名していない人・欠席者を除く）':'（欠席者を除く全員）');
+    return `<div class="stage"><p class="eyebrow">${esc(c.name)}</p>
+      <div class="poolnum"><b>${pool}</b><span class="muted">／ ${total}名 が対象</span></div><p class="hist">${why}</p>
+      <button class="btn big primary" data-a="pick">指名する</button>
+      <p class="hist">${todayLine} ・ Macではスペースキーでも指名できます</p></div>`;
+  }
+  if(ui.phase==='called'){
+    const r=ui.editRec?c.records.find(r=>r.id===ui.editRec):null;
+    const s=c.students.find(x=>x.id===ui.pick)||(r?{id:r.stu,sid:r.sid,name:r.name,kana:r.kana,grade:r.grade}:null);
+    if(!s){ui.phase='idle';return viewCall()}
+    const st=stats(c,s.id);const dis=ui.animating?' disabled':'';
+    const lateNow=!ui.animating&&attOn(c,s.id,today());
+    const hist=ui.animating?'&nbsp;':`${lateNow&&lateNow.late?`<b>今日 ${timeStr(lateNow.ts).slice(0,5)} 遅刻</b> ・ `:''}これまで：指名 ${st.n}回 ・ 欠席 ${st.abs}回${st.late?` ・ 遅刻 ${st.late}回`:''}${st.last?` ・ 前回 ${dayLabel(dayKey(st.last.ts))} ${esc(st.last.label)}`:''}`;
+    return `<div class="stage">
+      ${r?`<span class="editing">${dayLabel(dayKey(r.ts))} ${timeStr(r.ts).slice(0,5)} の記録を修正中</span>`:`<p class="eyebrow">${esc(c.name)}</p>`}
+      <p class="sid" id="sidEl">${sidLine(s)}</p>
+      <div class="namebox"><p class="kana" id="kanaEl">${esc(s.kana||'')}</p>
+      <h2 class="name${ui.animating?' spin':''}" id="nameEl" aria-live="polite">${esc(s.name)}</h2></div>
+      <p class="hist">${hist}</p>
+      ${S.opts.scale==='none'?`<div class="grades one"><button class="gbtn" data-a="grade" data-i="0"${dis}><span class="gl">記録する</span><span class="gp">評価なし <kbd>1</kbd> <kbd>Space</kbd></span></button></div>`:`<div class="grades">${S.grades.map((g,i)=>`<button class="gbtn${r&&!r.absent&&r.label===g.label?' current':''}" data-a="grade" data-i="${i}"${dis}><span class="gl">${esc(g.label)}</span><span class="gp">${g.points==null?'点数なし':g.points+'点'}${i<9?` <kbd>${i+1}</kbd>`:''}</span></button>`).join('')}</div>`}
+      <button class="abtn${r&&r.absent?' current':''}" data-a="absent"${dis}>欠席 <kbd>A</kbd></button>
+      <label class="memo">メモ（任意・評価ボタンの前に入力）<input type="text" id="memo" autocomplete="off"></label>
+      <div class="row">${r
+        ?`<button class="btn" data-a="cancelEdit">修正をやめる</button><button class="btn danger" data-a="delRec">この記録を取り消す</button>`
+        :`<button class="btn" data-a="repick"${dis}>別の学生にする</button><button class="link" data-a="stop">中断</button>`}</div>
+    </div>`;
+  }
+  // confirm
+  const r=c.records.find(r=>r.id===ui.lastRec);
+  if(!r){ui.phase='idle';return viewCall()}
+  const remain=notYetToday(c);
+  const long=[...r.label].length>1;
+  const cur=c.students.find(x=>x.id===r.stu)||{};
+  const kana=r.kana||cur.kana||'';
+  const grade=cur.grade||r.grade||'';
+  return `<div class="stage">
+    <div class="seal${r.absent?' absent':''}${long&&!r.absent?' long':''}">${esc(r.label)}</div>
+    <p class="sid">${sidLine({sid:r.sid,grade})}</p>
+    <div class="namebox">${kana?`<p class="kana">${esc(kana)}</p>`:''}<h2 class="name sm">${esc(r.name)}</h2></div>
+    <p class="hist">${dayLabel(dayKey(r.ts))} ${timeStr(r.ts)} に記録${r.points!=null?` ・ ${r.points}点`:''}${r.edited?' ・ 修正済み':''}</p>
+    ${r.memo?`<p class="notice small">${esc(r.memo)}</p>`:''}
+    <div class="row"><button class="btn" data-a="edit">修正</button><button class="btn primary" data-a="next">次を指名 <kbd>Space</kbd></button></div>
+    <p class="hist">${remain?`今日まだ指名していない人 ${remain}名`:'今日は全員を指名しました'} ・ ${todayLine}</p>
+    <button class="link" data-a="stop">指名を終える</button>
+  </div>`;
+}
+const recDay=()=>ui.recDate==='today'?today():ui.recDate;
+const recRangeLabel=()=>ui.recDate==='all'?'全期間':ui.recDate==='today'?`今日 ${dayLabel(today())}`:dayLabel(ui.recDate);
+function filteredRecs(c){return ui.recDate==='all'?c.records.slice():c.records.filter(r=>dayKey(r.ts)===recDay())}
+function summarize(c,recs){
+  const map=new Map();
+  c.students.forEach(s=>map.set(s.id,{sid:s.sid,name:s.name,kana:s.kana||'',grade:s.grade||'',n:0,abs:0,pts:0,np:0,counts:{},absDates:[]}));
+  recs.forEach(r=>{
+    let m=map.get(r.stu);
+    if(!m){m={sid:r.sid,name:r.name+'（名簿外）',kana:r.kana||'',grade:r.grade||'',n:0,abs:0,pts:0,np:0,counts:{},absDates:[]};map.set(r.stu,m)}
+    if(r.absent){m.abs++;m.absDates.push(dayKey(r.ts))}
+    else if(r.late){m.late=(m.late||0)+1;(m.lateDates=m.lateDates||[]).push(dayKey(r.ts))}
+    else{m.n++;m.counts[r.label]=(m.counts[r.label]||0)+1;if(typeof r.points==='number'){m.pts+=r.points;m.np++}}
+  });
+  return [...map.values()].sort((a,b)=>(a.sid||'').localeCompare(b.sid||'')||a.name.localeCompare(b.name,'ja'));
+}
+function labelSet(recs){const l=S.grades.map(g=>g.label).filter(x=>x!=='済');recs.forEach(r=>{if(isCall(r)&&r.label!=='済'&&!l.includes(r.label))l.push(r.label)});return l}
+function viewRec(){
+  const c=C();
+  const days=[...new Set(c.records.map(r=>dayKey(r.ts)))].sort().reverse();
+  if(!['all','today'].includes(ui.recDate)&&!days.includes(ui.recDate))ui.recDate='all';
+  const recs=filteredRecs(c);const td=today();
+  const tools=`<div class="toolbar">
+    <select id="recDate" aria-label="期間"><option value="all"${ui.recDate==='all'?' selected':''}>全期間（${c.records.length}件）</option><option value="today"${ui.recDate==='today'?' selected':''}>今日 ${dayLabel(td)}（${c.records.filter(r=>dayKey(r.ts)===td).length}件）</option>${days.filter(d=>d!==td).map(d=>`<option value="${d}"${d===ui.recDate?' selected':''}>${dayLabel(d)}（${c.records.filter(r=>dayKey(r.ts)===d).length}件）</option>`).join('')}</select>
+    <div class="seg"><button data-a="view" data-v="list" aria-pressed="${ui.recView==='list'}">記録一覧</button><button data-a="view" data-v="sum" aria-pressed="${ui.recView==='sum'}">学生別集計</button></div>
+    <div class="row" style="margin-left:auto"><button class="btn small" data-a="expRec">記録CSV</button><button class="btn small" data-a="expSum">集計CSV</button></div></div>`;
+  if(!c.records.length)return tools+`<div class="tbl-wrap"><p class="empty">まだ記録がありません。「指名」タブで指名して評価すると、日時とともにここに残ります。</p></div>`;
+  if(ui.recView==='list'){
+    const gmap=new Map(c.students.map(s=>[s.id,s.grade||'']));const gOf=r=>gmap.get(r.stu)||r.grade||'';const rg=recs.some(r=>gOf(r));
+    const rows=recs.slice().sort((a,b)=>b.ts.localeCompare(a.ts)).map(r=>`<tr>
+      <td>${dayLabel(dayKey(r.ts))} ${r.pre?'<span class="muted small">事前</span>':timeStr(r.ts).slice(0,5)}</td><td>${esc(r.sid)}</td>${rg?`<td>${esc(fmtGrade(gOf(r)))}</td>`:''}<td>${esc(r.name)}</td>
+      <td>${r.absent?'<span class="pill absent">欠席</span>':r.late?'<span class="pill late">遅刻</span>':`<span class="pill">${esc(r.label)}</span>`}</td>
+      <td class="num">${r.points??''}</td><td class="wrap-cell">${esc(r.memo)}</td>
+      <td><button class="btn small" data-a="editRow" data-id="${r.id}">修正</button></td></tr>`).join('');
+    return tools+`<div class="tbl-wrap"><table><thead><tr><th>日時</th><th>学籍番号</th>${rg?'<th>学年</th>':''}<th>氏名</th><th>評価</th><th class="num">点</th><th>メモ</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  const labels=labelSet(recs);const sum=summarize(c,recs);const sg=anyGrade(sum);
+  const rows=sum.map(m=>`<tr><td>${esc(m.sid)}</td>${sg?`<td>${esc(fmtGrade(m.grade))}</td>`:''}<td>${esc(m.name)}</td><td class="num">${m.n}</td><td class="num">${m.abs||''}</td><td class="num">${m.late||''}</td>${labels.map(l=>`<td class="num">${m.counts[l]||''}</td>`).join('')}<td class="num">${m.np?m.pts:''}</td><td class="num">${m.np?(m.pts/m.np).toFixed(2):''}</td></tr>`).join('');
+  return tools+`<div class="tbl-wrap"><table><thead><tr><th>学籍番号</th>${sg?'<th>学年</th>':''}<th>氏名</th><th class="num">指名</th><th class="num">欠席</th><th class="num">遅刻</th>${labels.map(l=>`<th class="num">${esc(l)}</th>`).join('')}<th class="num">合計点</th><th class="num">平均</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function viewRoster(){
+  const c=C();const d=ui.draft;
+  let prev='';
+  if(d){
+    const list=draftList(d);const dg=anyGrade(list);
+    const colOpt=(sel)=>`<option value="-1"${sel<0?' selected':''}>（使わない）</option>`+Array.from({length:d.ncol},(_,j)=>{const ex=(d.isHead?d.rows[0][j]:'')||((d.rows[d.isHead?1:0]||[])[j])||'';return `<option value="${j}"${sel===j?' selected':''}>${j+1}列目：${esc(ex.slice(0,14))}</option>`}).join('');
+    prev=`<div class="card" style="background:var(--sunk)">
+      <h3>読み込み内容の確認（${list.length}名）</h3>
+      <label class="check"><input type="checkbox" id="dHead"${d.isHead?' checked':''}>1行目は見出し行</label>
+      <div class="row"><label class="field">学籍番号の列<select id="dSid">${colOpt(d.sidCol)}</select></label><label class="field">氏名の列<select id="dName">${colOpt(d.nameCol)}</select></label><label class="field">ふりがなの列<select id="dKana">${colOpt(d.kanaCol)}</select></label><label class="field">学年の列<select id="dGrade">${colOpt(d.gradeCol)}</select></label></div>
+      <div class="tbl-wrap"><table><thead><tr><th>学籍番号</th><th>氏名</th><th>ふりがな</th>${dg?'<th>学年</th>':''}</tr></thead><tbody>${list.slice(0,6).map(s=>`<tr><td>${esc(s.sid)}</td><td>${esc(s.name)}</td><td>${esc(s.kana)}</td>${dg?`<td>${esc(fmtGrade(s.grade))}</td>`:''}</tr>`).join('')}${list.length>6?`<tr><td colspan="${dg?4:3}" class="muted">…ほか ${list.length-6}名</td></tr>`:''}</tbody></table></div>
+      <div class="row"><label class="check"><input type="radio" name="dMode" value="replace"${ui.mode==='replace'?' checked':''}>今の名簿と置き換える</label><label class="check"><input type="radio" name="dMode" value="add"${ui.mode==='add'?' checked':''}>今の名簿に追加する</label></div>
+      <p class="small muted">置き換えても、これまでの記録は消えません（学籍番号が同じ学生はそのまま引き継ぎます）。</p>
+      <div class="row"><button class="btn primary" data-a="commit"${list.length?'':' disabled'}>この内容で登録</button><button class="btn" data-a="dropDraft">やめる</button></div></div>`;
+  }
+  const day=ui.attDate||today();const isToday=day===today();
+  let nA=0,nL=0;const hg=anyGrade(c.students);
+  const st=c.students.map(s=>{
+    const a=attOn(c,s.id,day);const stt=a?(a.absent?'absent':'late'):'';
+    if(stt==='absent')nA++;if(stt==='late')nL++;
+    const chip=stt==='absent'?'<span class="pill absent">欠席</span>':stt==='late'?`<span class="pill late">遅刻${a.pre?'':' '+timeStr(a.ts).slice(0,5)}</span>`:'<span class="pill none">—</span>';
+    const btn=(v,t,cls='')=>`<button class="btn small ${cls}" data-a="att" data-v="${v}" data-id="${s.id}">${t}</button>`;
+    const acts=(stt!=='absent'?btn('absent','欠席'):'')+(stt!=='late'?btn('late','遅刻'):'')+(stt?btn('','解除'):'');
+    return `<tr><td>${esc(s.sid)}</td><td>${esc(s.name)}</td><td class="muted">${esc(s.kana)}</td>${hg?`<td>${esc(fmtGrade(s.grade))}</td>`:''}<td>${chip}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${acts}</div></td><td><button class="link small" data-a="delStu" data-id="${s.id}">名簿から外す</button></td></tr>`;
+  }).join('');
+  return `<div class="stack">
+  <div class="card"><h3>名簿を読み込む：${esc(c.name)}</h3>
+    <p class="small muted">Excel・学務システムの表をそのままコピーして貼り付けるか、1行に1人ずつ氏名を書きます。CSVファイル（UTF-8 / Shift_JIS）も読み込めます。</p>
+    <textarea id="rosterText" rows="6" placeholder="12345678&#9;山口 太郎&#9;ヤマグチ タロウ&#9;2&#10;12345679&#9;宇部 花子&#9;ウベ ハナコ&#9;3"></textarea>
+    <div class="row"><button class="btn primary" data-a="parseText">貼り付けた内容を確認</button>
+      <label class="btn">CSVファイルを選ぶ<input type="file" id="csvFile" accept=".csv,.txt,.tsv,text/csv,text/plain" class="sr"></label></div>
+    ${prev}
+  </div>
+  <div class="card"><div class="row"><h3>履修者 ${c.students.length}名</h3>
+      <label class="row small muted" style="margin-left:auto;gap:6px">出欠の日<input type="date" id="attDate" value="${day}"></label></div>
+    ${c.students.length?`<p class="small muted">${isToday?'今日':dayLabel(day)}：欠席 ${nA}名 ・ 遅刻 ${nL}名。${isToday?'欠席にした人は指名されません。遅刻にすると指名の対象に戻ります。':'事前にわかっている欠席を登録できます。'}</p>`:''}
+    ${c.students.length?`<div class="tbl-wrap"><table><thead><tr><th>学籍番号</th><th>氏名</th><th>ふりがな</th>${hg?'<th>学年</th>':''}<th>出欠</th><th></th><th></th></tr></thead><tbody>${st}</tbody></table></div>`:'<p class="muted">まだ登録されていません。</p>'}
+  </div>
+  <div class="card"><h3>講義</h3><p class="small muted">講義ごとに名簿と記録を分けて管理します。切り替えは画面上部のメニューから。</p>
+    <div class="row"><button class="btn" data-a="newCourse">講義を追加</button><button class="btn" data-a="renameCourse">名前を変更</button><button class="btn danger" data-a="delCourse">この講義を削除</button></div></div>
+  </div>`;
+}
+function viewSet(){
+  const gtext=S.grades.map(g=>g.label+','+(g.points??'')).join('\n');
+  return `<div class="stack">
+  <div class="card"><h3>評価の段階</h3>
+    <div class="seg wrapseg" role="group" aria-label="評価の段階">${[...Object.keys(SCALES),'custom'].map(k=>`<button data-a="scale" data-v="${k}" aria-pressed="${S.opts.scale===k}">${k==='custom'?'自由に設定':SCALES[k].name}</button>`).join('')}</div>
+    <div class="row small" style="gap:6px">${S.opts.scale==='none'?'<span class="muted">指名したことだけを記録します。ボタンは「記録する」と「欠席」の2つです。</span>':S.grades.map(g=>`<span class="pill">${esc(g.label)}</span><span class="muted">${g.points==null?'点数なし':g.points+'点'}</span>`).join('<span class="muted"> ・ </span>')}</div>
+    ${S.opts.scale!=='none'&&S.opts.scale!=='custom'?`<label class="check"><input type="checkbox" id="optPass"${S.opts.pass?' checked':''}>「パス」（点数なし）のボタンも出す</label>`:''}
+    ${S.opts.scale==='custom'?`<p class="small muted">1行に1つ、「表示,点数」の形で書きます。点数を空にすると点数なし（例：パス）。9個まで。</p>
+    <textarea id="gText" rows="6">${esc(gtext)}</textarea>
+    <div class="row"><button class="btn primary" data-a="saveGrades">保存</button></div>`:''}
+    <p class="small muted">欠席ボタンはどの設定でも表示されます。段階を変えても、これまでの記録はそのまま残ります。</p></div>
+  <div class="card"><h3>指名のしかた</h3>
+    <div class="stack" style="gap:6px">
+      <label class="check"><input type="radio" name="optMode" value="all"${S.opts.mode!=='least'?' checked':''}>全履修者からランダムに選ぶ</label>
+      <label class="check"><input type="radio" name="optMode" value="least"${S.opts.mode==='least'?' checked':''}>これまでの指名回数（欠席を除く）がいちばん少ない人の中からランダムに選ぶ</label>
+    </div>
+    <label class="check"><input type="checkbox" id="optSkip"${S.opts.skipCalled?' checked':''}>今日すでに指名した人は、出席者全員が終わるまで選ばない</label>
+    <label class="check"><input type="checkbox" id="optAnim"${S.opts.anim?' checked':''}>選ぶときに名前が切り替わるアニメーションを表示する</label>
+    <p class="small muted">どの方法でも、その日に欠席と記録した人は選ばれず、同じ人が続けて選ばれることもありません。</p></div>
+  <div class="card"><h3>自動保存</h3>
+    ${fsOK?`<p class="small muted">保存先のファイルを選ぶと、記録が変わるたびに自動で書き込みます。iCloud Drive か「Google ドライブ」のフォルダの中を選んでください。</p>
+    <p class="small">状態：<span id="autoStatus">${autoStatusText()}</span></p>
+    <div class="row"><button class="btn primary" data-a="autoSetup">${fileHandle?'保存先を選び直す':'保存先ファイルを選ぶ'}</button>${fileHandle&&autoState!=='ok'?'<button class="btn" data-a="autoResume">再開する</button>':''}${fileHandle?'<button class="btn" data-a="autoOff">自動保存をやめる</button>':''}</div>`
+    :`<p class="small muted">このブラウザ（Safari など）では、ファイルへの自動保存はできません。Mac で自動保存を使うときは、このページを Chrome か Edge で開いてください。Safari では、下のバックアップの知らせで保存を忘れないようにします。</p>`}
+  </div>
+  <div class="card"><h3>バックアップ</h3>
+    <p class="small muted">記録はこのブラウザの中だけに保存され、どこにも送信されません。バックアップはパスワードで暗号化して、iCloud Drive や Google Drive に保存できます。別の端末のバックアップは「統合」で取り込むと、両方の記録をまとめられます。</p>
+    <p class="small">最後のバックアップ（自動保存を含む）：${S.lastBackup?`${dayLabel(dayKey(S.lastBackup))} ${timeStr(S.lastBackup).slice(0,5)}`:'まだありません'}${hasUnbacked()?' ・ <b>その後に変更あり</b>':''}</p>
+    <div class="row"><button class="btn primary" data-a="backup">バックアップを作る</button><label class="btn">バックアップを取り込む<input type="file" id="restoreFile" accept=".json,application/json" class="sr"></label></div>
+    <label class="check"><input type="checkbox" id="optPrompt"${S.opts.promptOnStop?' checked':''}>「指名を終える」を押したとき、未保存の記録があればバックアップを促す</label>
+    <label class="check">バックアップしないまま <select id="optRemind">${[1,3,7].map(d=>`<option value="${d}"${S.opts.remindDays===d?' selected':''}>${d}日</option>`).join('')}</select> たったら、画面上部で知らせる</label>
+  </div>
+  <div class="card"><h3>自動スナップショット</h3>
+    <p class="small muted">このブラウザの中に、毎日の最終状態（14日分）と、削除・取り込みなどの直前の状態を自動で残しています。誤操作を元に戻すのに使えます（ブラウザのデータを消すと、これも消えます）。</p>
+    <div class="row"><button class="btn" data-a="snaps">一覧を見る・戻す</button></div></div>
+  <div class="card"><h3>すべて消去</h3><p class="small muted">すべての講義・名簿・記録を消去して、最初の状態に戻します。</p>
+    <div class="row"><button class="btn danger" id="wipe">すべて消去</button></div></div>
+  </div>`;
+}
+
+/* ---------- record edit modal ---------- */
+function editRowModal(id){
+  const c=C();const r=c.records.find(x=>x.id===id);if(!r)return;
+  const opts=S.grades.map((g,i)=>`<option value="${i}"${isCall(r)&&g.label===r.label?' selected':''}>${esc(g.label)}${g.points!=null?`（${g.points}点）`:''}</option>`).join('')
+    +(isCall(r)&&!S.grades.some(g=>g.label===r.label)?`<option value="keep" selected>${esc(r.label)}（現在の値）</option>`:'')
+    +`<option value="absent"${r.absent?' selected':''}>欠席</option><option value="late"${r.late?' selected':''}>遅刻</option>`;
+  openModal(`<h3>${esc(r.name)} <span class="muted small">${esc(r.sid)}</span></h3>
+    <p class="muted small">${dayLabel(dayKey(r.ts))} ${timeStr(r.ts)} の記録</p>
+    <label class="field">評価<select id="eG">${opts}</select></label>
+    <label class="field">メモ<input type="text" id="eM" value="${esc(r.memo)}"></label>
+    <div class="row"><button class="btn primary" id="eSave">保存</button><button class="btn" data-m="close">閉じる</button><button class="btn danger" id="eDel" style="margin-left:auto">削除</button></div>`,card=>{
+    card.querySelector('#eSave').onclick=()=>{
+      const v=card.querySelector('#eG').value;
+      if(v==='absent')Object.assign(r,{label:'欠席',points:null,absent:true,late:false});
+      else if(v==='late')Object.assign(r,{label:'遅刻',points:null,absent:false,late:true});
+      else if(v!=='keep'){const g=S.grades[+v];Object.assign(r,{label:g.label,points:g.points,absent:false,late:false})}
+      r.memo=card.querySelector('#eM').value.trim();r.edited=new Date().toISOString();r.updated=r.edited;
+      save();closeModal();render();toast('修正しました');
+    };
+    armButton(card.querySelector('#eDel'),'もう一度押すと削除',()=>{c.records=c.records.filter(x=>x.id!==id);tombRec(c,id);save();closeModal();render();toast('記録を削除しました')});
+  });
+}
+function nameModal(title,init,fn){
+  openModal(`<h3>${esc(title)}</h3><label class="field">講義名<input type="text" id="nmIn" value="${esc(init)}" placeholder="例：統計学 月曜2限"></label>
+    <div class="row"><button class="btn primary" id="nmOk">保存</button><button class="btn" data-m="close">やめる</button></div>`,card=>{
+    const go=()=>{const v=card.querySelector('#nmIn').value.trim();if(!v)return;closeModal();fn(v)};
+    card.querySelector('#nmOk').onclick=go;card.querySelector('#nmIn').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
+  });
+}
+
+/* ---------- events ---------- */
+document.querySelector('.tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(!b)return;ui.tab=b.dataset.tab;if(ui.animating){clearInterval(spinT);ui.animating=false}render();window.scrollTo(0,0)});
+$('#courseSel').addEventListener('change',e=>{S.cur=e.target.value;Object.assign(ui,{phase:'idle',pick:null,editRec:null,lastRec:null,ignoreCalled:false,draft:null,recDate:'all'});save();render()});
+
+const main=$('#main');
+main.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-a]');if(!b||b.disabled)return;
+  const a=b.dataset.a;const c=C();
+  switch(a){
+    case 'pick':pick();break;
+    case 'pickAll':pick(true);break;
+    case 'repick':pick();break;
+    case 'next':pick();break;
+    case 'stop':ui.phase='idle';ui.ignoreCalled=false;render();if(S.opts.promptOnStop&&autoState!=='ok'&&hasUnbacked())backupModal({title:'今日の記録をバックアップ',lead:'まだバックアップしていない記録があります。'});break;
+    case 'autoSetup':autoSetupModal();break;
+    case 'autoResume':resumeModal();break;
+    case 'autoOff':autoOff();break;
+    case 'snaps':snapsModal();break;
+    case 'grade':record(+b.dataset.i);break;
+    case 'absent':record('absent');break;
+    case 'edit':{const r=c.records.find(r=>r.id===ui.lastRec);if(r){ui.editRec=r.id;ui.pick=r.stu;ui.phase='called';render()}break}
+    case 'cancelEdit':ui.editRec=null;ui.phase='confirm';render();break;
+    case 'delRec':confirmModal('この記録を取り消しますか','取り消すと、この学生は未評価の状態に戻ります。','取り消す',()=>{c.records=c.records.filter(r=>r.id!==ui.editRec);tombRec(c,ui.editRec);ui.editRec=null;ui.lastRec=null;ui.phase='called';save();render();toast('記録を取り消しました')});break;
+    case 'goRoster':ui.tab='roster';render();break;
+    case 'view':ui.recView=b.dataset.v;render();break;
+    case 'editRow':editRowModal(b.dataset.id);break;
+    case 'expRec':{
+      const recs=filteredRecs(c).sort((x,y)=>x.ts.localeCompare(y.ts));
+      const kmap=new Map(c.students.map(s=>[s.id,s.kana||'']));
+      const gmap=new Map(c.students.map(s=>[s.id,s.grade||'']));const gOf=r=>fmtGrade(gmap.get(r.stu)||r.grade||'');const cg=recs.some(r=>gOf(r));
+      const rows=[['日付','時刻','学籍番号',...(cg?['学年']:[]),'氏名','ふりがな','種類','評価','点数','欠席','遅刻','メモ','修正日時']].concat(recs.map(r=>[dayKey(r.ts),r.pre?'事前登録':timeStr(r.ts),r.sid,...(cg?[gOf(r)]:[]),r.name,r.kana||kmap.get(r.stu)||'',r.absent?'欠席':r.late?'遅刻':'指名',isCall(r)?r.label:'',r.points??'',r.absent?'1':'',r.late?'1':'',r.memo||'',r.edited?dayKey(r.edited)+' '+timeStr(r.edited):'']));
+      exportModal(`記録CSV（${recs.length}件・${recRangeLabel()}）`,`${safeName(c.name)}_記録_${ui.recDate==='all'?'全期間_'+stamp():recDay().replace(/-/g,'')}.csv`,toCSV(rows),true,toCSV(settingsRows(c,recRangeLabel())));break}
+    case 'expSum':{
+      const recs=filteredRecs(c);const labels=labelSet(recs);
+      const sum=summarize(c,recs);const cg=anyGrade(sum);
+      const rows=[['学籍番号',...(cg?['学年']:[]),'氏名','ふりがな','指名回数','欠席回数','遅刻回数',...labels,'合計点','平均点','欠席日','遅刻日']].concat(sum.map(m=>[m.sid,...(cg?[fmtGrade(m.grade)]:[]),m.name,m.kana,m.n,m.abs,m.late||0,...labels.map(l=>m.counts[l]||0),m.np?m.pts:'',m.np?(m.pts/m.np).toFixed(2):'',m.absDates.join(' '),(m.lateDates||[]).join(' ')]));
+      exportModal(`学生別集計CSV（${recRangeLabel()}）`,`${safeName(c.name)}_集計_${ui.recDate==='all'?'全期間_'+stamp():recDay().replace(/-/g,'')}.csv`,toCSV(rows),true,toCSV(settingsRows(c,recRangeLabel())));break}
+    case 'parseText':{
+      const t=$('#rosterText').value;if(!t.trim()){toast('名簿を貼り付けてください');break}
+      ui.draft=guessCols(parseTable(t));render();break}
+    case 'dropDraft':ui.draft=null;render();break;
+    case 'commit':{
+      const list=draftList(ui.draft);const key=s=>s.sid?'#'+s.sid:'@'+s.name;
+      const old=new Map(c.students.map(s=>[key(s),s]));
+      if(ui.mode==='replace'){snapshot('evt','名簿を置き換える前');const keep=new Set();c.students=list.map(s=>{const o=old.get(key(s));const id=o?o.id:uid();keep.add(id);return {id,sid:s.sid,name:s.name,kana:s.kana,grade:s.grade}});old.forEach(o=>{if(o&&o.id&&!keep.has(o.id))tombStu(c,o.id)})}
+      else{let added=0;list.forEach(s=>{if(!old.has(key(s))){c.students.push({id:uid(),sid:s.sid,name:s.name,kana:s.kana,grade:s.grade});old.set(key(s),1);added++}});toast(`${added}名を追加しました`)}
+      if(ui.mode==='replace')toast(`${list.length}名を登録しました`);
+      ui.draft=null;save();render();break}
+    case 'att':{const s=c.students.find(x=>x.id===b.dataset.id);if(!s)break;
+      const day=ui.attDate||today();setAtt(c,s,day,b.dataset.v);render();
+      toast(`${s.name}：${b.dataset.v==='absent'?'欠席':b.dataset.v==='late'?'遅刻':'出欠の記録を解除'}${b.dataset.v?'にしました':'しました'}`);break}
+    case 'delStu':{const s=c.students.find(x=>x.id===b.dataset.id);if(!s)break;
+      confirmModal(`${s.name} を名簿から外しますか`,'これまでの記録は残ります（集計では「名簿外」と表示されます）。','外す',()=>{c.students=c.students.filter(x=>x.id!==s.id);tombStu(c,s.id);save();render()});break}
+    case 'newCourse':nameModal('講義を追加','',v=>{const n={id:uid(),name:v,students:[],records:[]};S.courses.push(n);S.cur=n.id;ui.draft=null;save();render();toast('講義を追加しました')});break;
+    case 'renameCourse':nameModal('講義名を変更',c.name,v=>{c.name=v;save();render()});break;
+    case 'delCourse':confirmModal(`「${c.name}」を削除しますか`,`名簿と記録 ${c.records.length}件 がすべて消えます。必要なら先に「記録」タブからCSVを保存してください。`,'削除する',async()=>{await snapshot('evt',`講義「${c.name}」を削除する前`);(S.courseTombs=S.courseTombs||{})[c.id]=nowISO();S.courses=S.courses.filter(x=>x.id!==c.id);if(!S.courses.length)S.courses.push({id:uid(),name:'新しい講義',students:[],records:[]});S.cur=S.courses[0].id;ui.phase='idle';save();render();toast('講義を削除しました')});break;
+    case 'saveGrades':{
+      const lines=$('#gText').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+      const gs=[];for(const l of lines){const [lab,pt]=l.split(/[,，\t]/).map(x=>(x||'').trim());if(!lab)continue;const p=pt===''||pt==null?null:Number(pt);if(p!=null&&isNaN(p)){toast(`「${l}」の点数が数字ではありません`);return}gs.push({label:lab,points:p})}
+      if(!gs.length){toast('評価を1つ以上書いてください');break}
+      if(gs.length>9){toast('評価は9個までです');break}
+      S.grades=gs;S.opts.scale='custom';save({silent:true});render();toast('評価の段階を保存しました');break}
+    case 'scale':{const k=b.dataset.v;S.opts.scale=k;if(k!=='custom')S.grades=scaleGrades(k,S.opts.pass);save({silent:true});render();toast(k==='custom'?'評価を自由に設定できます':`${SCALES[k].name}にしました`);break}
+    case 'backup':backupModal();break;
+  }
+});
+main.addEventListener('change',async e=>{
+  const t=e.target;
+  if(t.id==='recDate'){ui.recDate=t.value;render()}
+  else if(t.id==='optSkip'){S.opts.skipCalled=t.checked;save();toast('保存しました')}
+  else if(t.id==='dHead'){ui.draft.isHead=t.checked;render()}
+  else if(t.id==='dSid'){ui.draft.sidCol=+t.value;render()}
+  else if(t.id==='dName'){ui.draft.nameCol=+t.value;render()}
+  else if(t.id==='optPass'){S.opts.pass=t.checked;S.grades=scaleGrades(S.opts.scale,t.checked);save({silent:true});render()}
+  else if(t.id==='optPrompt'){S.opts.promptOnStop=t.checked;save({silent:true});toast('保存しました')}
+  else if(t.id==='optRemind'){S.opts.remindDays=+t.value;save({silent:true});toast('保存しました')}
+  else if(t.id==='attDate'){ui.attDate=t.value||today();render()}
+  else if(t.id==='dKana'){ui.draft.kanaCol=+t.value;render()}
+  else if(t.id==='dGrade'){ui.draft.gradeCol=+t.value;render()}
+  else if(t.name==='optMode'){S.opts.mode=t.value;save();toast('保存しました')}
+  else if(t.id==='optAnim'){S.opts.anim=t.checked;save();toast('保存しました')}
+  else if(t.name==='dMode'){ui.mode=t.value}
+  else if(t.id==='csvFile'&&t.files[0]){const txt=await readFileText(t.files[0]);ui.draft=guessCols(parseTable(txt));render()}
+  else if(t.id==='restoreFile'&&t.files[0]){
+    let obj;try{obj=JSON.parse(await readFileText(t.files[0]))}catch(err){obj=null}
+    t.value='';
+    if(obj&&obj.format==='shimeicho-encrypted')passwordModal(obj);
+    else if(obj&&Array.isArray(obj.courses))confirmRestore(obj);
+    else toast('このファイルはバックアップとして読めませんでした');
+  }
+});
+/* ---------- encrypted backup ---------- */
+const b64=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)};
+const unb64=s=>Uint8Array.from(atob(s),ch=>ch.charCodeAt(0));
+const ITER=310000;
+async function deriveKey(pass,salt,iter){
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function encryptText(text,pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(pass,salt,ITER);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(text)));
+  return JSON.stringify({format:'shimeicho-encrypted',v:1,kdf:'PBKDF2-SHA256',iter:ITER,cipher:'AES-256-GCM',created:new Date().toISOString(),salt:b64(salt),iv:b64(iv),data:b64(ct)});
+}
+async function decryptText(obj,pass){
+  const key=await deriveKey(pass,unb64(obj.salt),obj.iter||ITER);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(obj.iv)},key,unb64(obj.data));
+  return new TextDecoder().decode(pt);
+}
+const canCrypto=()=>!!(window.crypto&&crypto.subtle&&window.isSecureContext!==false);
+function markBackup(){S.lastBackup=nowISO();save({silent:true});if(ui.tab==='set')render()}
+let sessionPass=null;
+function backupModal(o){
+  const cc=canCrypto();const title=(o&&o.title)||'バックアップを作る';
+  openModal(`<h3>${esc(title)}</h3>
+    <p class="small muted">${o&&o.lead?esc(o.lead)+' ':''}全講義の名簿と記録を、1つのファイルにまとめます。</p>
+    ${cc?`<label class="check" id="bkEncL"><input type="checkbox" id="bkEnc" checked>パスワードで暗号化する（おすすめ）</label>
+    ${sessionPass?`<p class="small" id="bkSame">さっきと同じパスワードで暗号化します。 <button class="link" id="bkOther">別のパスワードにする</button></p>`:''}
+    <div id="bkPw" class="stack" style="gap:8px"${sessionPass?' hidden':''}>
+      <label class="field">パスワード（8文字以上）<input type="password" id="bkP1" autocomplete="new-password"></label>
+      <label class="field">もう一度<input type="password" id="bkP2" autocomplete="new-password"></label>
+      <label class="check small"><input type="checkbox" id="bkRem" checked>このページを閉じるまでパスワードを覚えておく（次回のバックアップが速くなります）</label>
+      <p class="small muted">パスワードを忘れると復元できません。パスワード管理アプリなどに控えてください。</p></div>`
+    :`<p class="notice small">この開き方ではブラウザの暗号化機能が使えません。https:// のURL（GitHub Pages など）で開くと暗号化できます。</p>`}
+    <div class="row" id="bkStep1"><button class="btn primary" id="bkMake">作成</button><button class="btn" data-m="close">${o&&o.title?'今回はしない':'やめる'}</button></div>
+    <div id="bkStep2" class="stack" style="gap:10px" hidden>
+      <p class="notice small" id="bkInfo"></p>
+      <div class="row"><button class="btn primary" id="bkShare" hidden>保存先を選ぶ…</button><button class="btn" id="bkDl">ファイルに保存</button><button class="btn" data-m="close">閉じる</button></div>
+      <p class="small muted">iPhone / iPad：「保存先を選ぶ」→「"ファイル"に保存」で、iCloud Drive か Google Drive（Google ドライブ アプリが必要）を選べます。<br>Mac：「ファイルに保存」でダウンロードフォルダに入ります。iCloud Drive や「Google ドライブ for desktop」のフォルダへ移してください。</p>
+    </div>`,card=>{
+    let useSession=!!sessionPass;
+    const enc=card.querySelector('#bkEnc'),pwBox=card.querySelector('#bkPw'),same=card.querySelector('#bkSame');
+    const other=card.querySelector('#bkOther');
+    if(other)other.onclick=()=>{useSession=false;same.hidden=true;pwBox.hidden=false;card.querySelector('#bkP1').focus()};
+    if(enc)enc.onchange=()=>{if(useSession){same.hidden=!enc.checked}else pwBox.hidden=!enc.checked};
+    const mk=card.querySelector('#bkMake');
+    mk.onclick=async()=>{
+      const doEnc=!!(enc&&enc.checked);let text;
+      if(doEnc){
+        let pw=sessionPass;
+        if(!useSession){
+          const p1=card.querySelector('#bkP1').value,p2=card.querySelector('#bkP2').value;
+          if(p1.length<8){toast('パスワードは8文字以上にしてください');return}
+          if(p1!==p2){toast('2つのパスワードが一致しません');return}
+          pw=p1;sessionPass=card.querySelector('#bkRem').checked?p1:null;
+        }
+        mk.disabled=true;mk.textContent='暗号化しています…';
+        try{text=await encryptText(JSON.stringify(S),pw)}catch(e){mk.disabled=false;mk.textContent='作成';toast('暗号化できませんでした');return}
+      }else text=JSON.stringify(S);
+      const name=`指名帳_バックアップ_${stamp()}${doEnc?'_暗号化':''}.json`;
+      let file=null;try{file=new File([text],name,{type:'application/json'})}catch(e){}
+      ['#bkStep1','#bkPw','#bkEncL','#bkSame'].forEach(s=>{const el=card.querySelector(s);if(el)el.hidden=true});
+      card.querySelector('#bkStep2').hidden=false;
+      card.querySelector('#bkInfo').textContent=`${name} を作りました（${doEnc?'暗号化済み':'暗号化なし'}）。保存先を選んでください。`;
+      const sh=card.querySelector('#bkShare');
+      if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
+        sh.hidden=false;
+        sh.onclick=async()=>{try{await navigator.share({files:[file],title:name});markBackup();toast('保存しました')}catch(e){if(e&&e.name!=='AbortError')toast('共有できませんでした。「ファイルに保存」を使ってください')}};
+      }
+      card.querySelector('#bkDl').onclick=()=>{download(name,text,'application/json');markBackup()};
+    };
+  });
+}
+function passwordModal(obj){
+  if(!canCrypto()){toast('この開き方では暗号化されたバックアップを開けません。https:// のURLで開いてください');return}
+  openModal(`<h3>暗号化されたバックアップ</h3>
+    <p class="small muted">${obj.created?`${dayLabel(dayKey(obj.created))} ${timeStr(obj.created).slice(0,5)} に作成。`:''}作成時のパスワードを入力してください。</p>
+    <label class="field">パスワード<input type="password" id="rsP" autocomplete="current-password"></label>
+    <p class="small" id="rsErr" style="color:var(--seal)" hidden>パスワードが違うか、ファイルが壊れています。</p>
+    <div class="row"><button class="btn primary" id="rsOk">開く</button><button class="btn" data-m="close">やめる</button></div>`,card=>{
+    const ok=card.querySelector('#rsOk'),inp=card.querySelector('#rsP');
+    const go=async()=>{
+      ok.disabled=true;ok.textContent='復号しています…';
+      try{const data=JSON.parse(await decryptText(obj,inp.value));if(!Array.isArray(data.courses))throw 0;closeModal();confirmRestore(data)}
+      catch(e){ok.disabled=false;ok.textContent='開く';card.querySelector('#rsErr').hidden=false;inp.select()}
+    };
+    ok.onclick=go;inp.addEventListener('keydown',e=>{if(e.key==='Enter')go()});
+  });
+}
+function normalizeAfterRestore(){
+  if(!S.courses.length){const c={id:uid(),name:'新しい講義',students:[],records:[]};S.courses.push(c)}
+  if(!S.courses.some(c=>c.id===S.cur))S.cur=S.courses[0].id;
+  if(!Array.isArray(S.grades)||!S.grades.length)S.grades=DEFAULT_GRADES.map(g=>({...g}));
+  if(!S.opts||!S.opts.scale)S.opts=Object.assign({},S.opts||{},detectScale(S.grades));
+  S.opts=Object.assign({...DEFAULT_OPTS},S.opts||{});
+  ensureShape();
+}
+// 「すべて消去」は描画のたびに作り直されるので委譲で処理
+main.addEventListener('click',e=>{
+  const w=e.target.closest('#wipe');if(!w)return;
+  if(w.classList.contains('armed')){snapshot('evt','すべて消去する前');S=fresh();save();Object.assign(ui,{phase:'idle',pick:null,editRec:null,lastRec:null,draft:null});ui.tab='call';render();toast('すべて消去しました')}
+  else{w.classList.add('armed');w.textContent='もう一度押すと消去';setTimeout(()=>{if(w.isConnected){w.classList.remove('armed');w.textContent='すべて消去'}},4000)}
+});
+
+document.addEventListener('keydown',e=>{
+  if(ui.tab!=='call'||!$('#modal').hidden)return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const tag=(e.target.tagName||'');
+  if(/INPUT|TEXTAREA|SELECT|BUTTON/.test(tag))return;
+  if((e.key===' '||e.key==='Enter')&&(ui.phase==='idle'||ui.phase==='confirm')){
+    e.preventDefault();pick();
+  }else if(ui.phase==='called'){
+    if(e.key===' '&&S.opts.scale==='none'){e.preventDefault();record(0)}
+    else if(/^[1-9]$/.test(e.key)&&S.grades[+e.key-1]){e.preventDefault();record(+e.key-1)}
+    else if(e.key==='a'||e.key==='A'){e.preventDefault();record('absent')}
+  }
+});
+
+/* ---------- 保護：削除の記録（墓石）・統合 ---------- */
+const nowISO=()=>new Date().toISOString();
+function tombRec(c,id){(c.tombs=c.tombs||{})[id]=nowISO()}
+function tombStu(c,id){(c.stuTombs=c.stuTombs||{})[id]=nowISO()}
+const upd=r=>r.updated||r.edited||r.ts;
+const maxMerge=(a,b)=>{const o={...(a||{})};for(const k in (b||{}))if(!o[k]||b[k]>o[k])o[k]=b[k];return o};
+function ensureShape(){
+  const cutoff=new Date(Date.now()-400*864e5).toISOString();
+  const prune=o=>{o=o||{};for(const k in o)if(o[k]<cutoff)delete o[k];return o};
+  S.courseTombs=prune(S.courseTombs);
+  S.courses.forEach(c=>{c.students=c.students||[];c.records=c.records||[];c.tombs=prune(c.tombs);c.stuTombs=prune(c.stuTombs)});
+}
+function mergeState(local,inc){
+  const L=JSON.parse(JSON.stringify(local)),I=JSON.parse(JSON.stringify(inc));
+  const rep={added:0,updated:0,removed:0,dedup:0,courses:0,students:0};
+  L.courseTombs=maxMerge(L.courseTombs,I.courseTombs);
+  for(const ic of (I.courses||[])){
+    ic.records=ic.records||[];ic.students=ic.students||[];
+    if(L.courseTombs[ic.id])continue;
+    const lc=L.courses.find(c=>c.id===ic.id)||L.courses.find(c=>c.name===ic.name);
+    if(!lc){L.courses.push(ic);rep.courses++;rep.added+=ic.records.length;continue}
+    mergeCourse(lc,ic,rep);
+  }
+  L.courses=L.courses.filter(c=>!L.courseTombs[c.id]);
+  return {state:L,rep};
+}
+function mergeCourse(lc,ic,rep){
+  lc.records=lc.records||[];lc.students=lc.students||[];
+  lc.tombs=maxMerge(lc.tombs,ic.tombs);lc.stuTombs=maxMerge(lc.stuTombs,ic.stuTombs);
+  // 学生：ID → 学籍番号 → 氏名 の順で同じ人を探す
+  const idMap=new Map();
+  for(const is of ic.students){
+    const ls=lc.students.find(s=>s.id===is.id)||(is.sid?lc.students.find(s=>s.sid===is.sid):lc.students.find(s=>!s.sid&&s.name===is.name));
+    if(ls){idMap.set(is.id,ls.id);if(!ls.kana&&is.kana)ls.kana=is.kana;if(!ls.grade&&is.grade)ls.grade=is.grade}
+    else{idMap.set(is.id,is.id);if(!lc.stuTombs[is.id]){lc.students.push(is);rep.students++}}
+  }
+  lc.students=lc.students.filter(s=>!lc.stuTombs[s.id]);
+  // 記録：IDごとに新しい方を残す
+  const byId=new Map(lc.records.map(r=>[r.id,r]));
+  for(const r0 of ic.records){
+    const r={...r0,stu:idMap.get(r0.stu)||r0.stu};const lr=byId.get(r.id);
+    if(!lr){byId.set(r.id,r);rep.added++}
+    else if(upd(r)>upd(lr)){byId.set(r.id,r);rep.updated++}
+  }
+  let recs=[...byId.values()];const before=recs.length;
+  recs=recs.filter(r=>!(lc.tombs[r.id]&&lc.tombs[r.id]>=upd(r)));rep.removed+=before-recs.length;
+  // 出欠：同じ学生・同じ日は1件だけ（後から操作した方を残す）
+  const att=new Map(),out=[];
+  for(const r of recs){
+    if(!isAtt(r)){out.push(r);continue}
+    const k=r.stu+'|'+dayKey(r.ts);const o=att.get(k);
+    if(!o)att.set(k,r);
+    else{rep.dedup++;const keep=upd(r)>upd(o)?r:o;const drop=keep===r?o:r;lc.tombs[drop.id]=nowISO();att.set(k,keep)}
+  }
+  lc.records=out.concat([...att.values()]).sort((a,b)=>a.ts.localeCompare(b.ts));
+}
+const resetUi=()=>Object.assign(ui,{phase:'idle',pick:null,editRec:null,lastRec:null,draft:null,ignoreCalled:false});
+const SHARED_OPTS=['scale','pass','skipCalled','mode','anim','promptOnStop','remindDays','csvSettings'];
+function takeSettings(src){
+  if(Array.isArray(src.grades)&&src.grades.length)S.grades=src.grades.map(g=>({...g}));
+  const o=src.opts||{};SHARED_OPTS.forEach(k=>{if(o[k]!==undefined)S.opts[k]=o[k]});
+  if(!o.scale)Object.assign(S.opts,detectScale(S.grades));
+}
+async function doMerge(data,withSettings){
+  await snapshot('evt','統合する前');
+  const {state,rep}=mergeState(S,data);
+  S=state;if(withSettings)takeSettings(data);normalizeAfterRestore();save();resetUi();render();
+  openModal(`<h3>統合しました</h3><ul class="small" style="margin:0;padding-left:1.2em">
+    <li>新しく取り込んだ記録：${rep.added}件</li><li>新しい方に更新した記録：${rep.updated}件</li>
+    <li>削除を反映した記録：${rep.removed}件</li><li>出欠の重複を整理：${rep.dedup}件</li>
+    ${withSettings?'<li>設定をファイルに合わせました</li>':''}${rep.courses?`<li>追加した講義：${rep.courses}件</li>`:''}${rep.students?`<li>名簿に追加した学生：${rep.students}名</li>`:''}</ul>
+    <p class="small muted">統合前の状態は「自動スナップショット」に残してあります。</p>
+    <div class="row"><button class="btn primary" data-m="close">閉じる</button></div>`);
+}
+function confirmRestore(data){
+  const n=data.courses.length,m=data.courses.reduce((a,c)=>a+(c.records||[]).length,0);
+  const when=data.changedAt?`（${dayLabel(dayKey(data.changedAt))} ${timeStr(data.changedAt).slice(0,5)} 時点）`:'';
+  openModal(`<h3>バックアップを取り込む</h3>
+    <p class="small muted">このファイル：講義 ${n}件・記録 ${m}件${when}</p>
+    <div class="stack" style="gap:8px">
+      <label class="check small"><input type="checkbox" id="imSet">設定（評価の段階・指名のしかた など）もこのファイルに合わせる${data.opts&&data.opts.scale?`<span class="muted">（ファイル側：${esc(data.opts.scale==='none'?'評価なし':data.opts.scale==='custom'?'自由に設定':(SCALES[data.opts.scale]||{}).name||'')}）</span>`:''}</label>
+      <button class="btn primary" id="imMerge">統合する（おすすめ）</button>
+      <p class="small muted">今のデータとファイルを合わせます。どちらかの端末で付けた記録はすべて残ります。同じ記録を両方で修正していたら新しい方を、削除した記録は削除を反映します。</p>
+      <button class="btn danger" id="imRep">置き換える</button>
+      <p class="small muted">今のデータを捨てて、ファイルの内容（設定を含む）だけにします。</p>
+    </div>
+    <div class="row"><button class="btn" data-m="close">やめる</button></div>`,card=>{
+    card.querySelector('#imMerge').onclick=()=>{const t=card.querySelector('#imSet').checked;closeModal();doMerge(data,t)};
+    armButton(card.querySelector('#imRep'),'もう一度押すと置き換え',async()=>{closeModal();await snapshot('evt','置き換える前');S=data;normalizeAfterRestore();save();resetUi();render();toast('置き換えました')});
+  });
+}
+
+/* ---------- IndexedDB：自動スナップショット・自動保存先 ---------- */
+let dbP=null;
+function db(){
+  if(!dbP)dbP=new Promise((res,rej)=>{try{
+    const q=indexedDB.open('shimeicho',1);
+    q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains('snaps'))d.createObjectStore('snaps',{keyPath:'key'});if(!d.objectStoreNames.contains('kv'))d.createObjectStore('kv')};
+    q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);
+  }catch(e){rej(e)}});
+  return dbP;
+}
+function idb(store,mode,fn){return db().then(d=>new Promise((res,rej)=>{const tx=d.transaction(store,mode);const q=fn(tx.objectStore(store));tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>rej(tx.error)}))}
+const idbGet=(s,k)=>idb(s,'readonly',st=>st.get(k)).catch(()=>undefined);
+const idbPut=(s,v,k)=>idb(s,'readwrite',st=>k===undefined?st.put(v):st.put(v,k)).catch(()=>{});
+const idbDel=(s,k)=>idb(s,'readwrite',st=>st.delete(k)).catch(()=>{});
+const idbAll=s=>idb(s,'readonly',st=>st.getAll()).catch(()=>[]);
+async function snapshot(kind,label){
+  try{
+    const at=nowISO();const key=kind==='day'?'day:'+today():'evt:'+at;
+    await idbPut('snaps',{key,kind,label:label||'',at,courses:S.courses.length,records:S.courses.reduce((a,c)=>a+c.records.length,0),data:JSON.stringify(S)});
+    const all=(await idbAll('snaps'))||[];
+    const old=all.filter(x=>x.kind==='day').sort((a,b)=>b.key.localeCompare(a.key)).slice(14)
+      .concat(all.filter(x=>x.kind!=='day').sort((a,b)=>b.at.localeCompare(a.at)).slice(10));
+    for(const x of old)await idbDel('snaps',x.key);
+  }catch(e){}
+}
+async function snapsModal(){
+  const all=((await idbAll('snaps'))||[]).sort((a,b)=>b.at.localeCompare(a.at));
+  openModal(`<h3>自動スナップショット</h3>
+    <p class="small muted">このブラウザの中に、日ごとの最終状態（14日分）と、削除・取り込みなどの直前の状態（10件）を自動で残しています。ブラウザのデータを消すと、これも一緒に消えます。</p>
+    ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>日時</th><th>内容</th><th class="num">記録</th><th></th></tr></thead><tbody>${all.map(x=>`<tr><td>${dayLabel(dayKey(x.at))} ${timeStr(x.at).slice(0,5)}</td><td>${x.kind==='day'?'その日の最終状態':esc(x.label)}</td><td class="num">${x.records}</td><td><button class="btn small" data-k="${esc(x.key)}">この状態に戻す</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">まだありません。記録を付けると自動で作られます。</p>'}
+    <div class="row"><button class="btn" data-m="close">閉じる</button></div>`,card=>{
+    card.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{
+      const x=all.find(y=>y.key===b.dataset.k);if(!x)return;closeModal();
+      confirmModal('この状態に戻しますか',`${dayLabel(dayKey(x.at))} ${timeStr(x.at).slice(0,5)} の状態（記録 ${x.records}件）に戻します。今の状態も念のためスナップショットに残します。`,'戻す',async()=>{
+        await snapshot('evt','戻す前');S=JSON.parse(x.data);normalizeAfterRestore();save();resetUi();render();toast('戻しました');
+      });
+    });
+  });
+}
+
+/* ---------- 自動保存（Chrome / Edge のファイル書き込み） ---------- */
+const fsOK=typeof window.showSaveFilePicker==='function';
+let fileHandle=null,autoPass=null,autoState='off',autoT=null,autoName='',autoSig=null;
+async function initAutoSave(){
+  if(!fsOK)return;
+  fileHandle=await idbGet('kv','autoHandle');
+  if(!fileHandle){autoState='off';updateStatusBar();return}
+  autoName=fileHandle.name||'';
+  let p='prompt';try{p=await fileHandle.queryPermission({mode:'readwrite'})}catch(e){}
+  autoState=(p==='granted'&&!S.opts.autoEnc)?'ok':'needResume';
+  updateStatusBar();renderAutoStatus();
+  if(autoState==='ok')scheduleAuto();
+}
+function scheduleAuto(){if(autoState!=='ok'||!fileHandle)return;clearTimeout(autoT);autoT=setTimeout(()=>writeAuto(false),1500)}
+async function writeAuto(force){
+  if(!fileHandle)return;
+  try{
+    if(!force){
+      if(autoSig===null)autoSig=(await idbGet('kv','autoSig'))||undefined;
+      const f=await fileHandle.getFile();
+      if(autoSig&&f.size>0&&(f.lastModified!==autoSig.m||f.size!==autoSig.s)){autoState='conflict';updateStatusBar();renderAutoStatus();return}
+    }
+    const text=S.opts.autoEnc?await encryptText(JSON.stringify(S),autoPass):JSON.stringify(S);
+    const w=await fileHandle.createWritable();await w.write(text);await w.close();
+    const f2=await fileHandle.getFile();autoSig={m:f2.lastModified,s:f2.size};idbPut('kv',autoSig,'autoSig');
+    autoState='ok';S.lastBackup=nowISO();S.lastAuto=S.lastBackup;save({silent:true});
+  }catch(e){autoState='error';updateStatusBar()}
+  renderAutoStatus();
+}
+function autoStatusText(){
+  if(!fileHandle)return '未設定';
+  const last=S.lastAuto?`（最終 ${dayLabel(dayKey(S.lastAuto))} ${timeStr(S.lastAuto).slice(0,5)}）`:'';
+  return ({ok:`「${esc(autoName)}」に自動保存中${S.opts.autoEnc?'・暗号化':''}${last}`,needResume:`停止中：再開の操作が必要です${last}`,error:`保存に失敗しました${last}`,conflict:'保存先のファイルが別の端末で更新されたため、上書きせずに止めています'})[autoState]||'未設定';
+}
+function renderAutoStatus(){const el=$('#autoStatus');if(el)el.innerHTML=autoStatusText()}
+function autoSetupModal(){
+  const cc=canCrypto();
+  openModal(`<h3>自動保存の設定</h3>
+    <p class="small muted">保存先のファイルを1つ選ぶと、記録が変わるたびにそのファイルへ自動で書き込みます。iCloud Drive か「Google ドライブ」のフォルダの中を選ぶと、そのままクラウドにも残ります。</p>
+    ${cc?`<label class="check"><input type="checkbox" id="auEnc" checked>パスワードで暗号化する</label>
+    <div id="auPw" class="stack" style="gap:8px">
+      <label class="field">パスワード（8文字以上）<input type="password" id="auP1" autocomplete="new-password"></label>
+      <label class="field">もう一度<input type="password" id="auP2" autocomplete="new-password"></label>
+      <p class="small muted">ブラウザを開き直すたびに、このパスワードを1回入力します。忘れるとファイルを開けません。</p></div>`:''}
+    <div class="row"><button class="btn primary" id="auGo">保存先ファイルを選ぶ</button><button class="btn" data-m="close">やめる</button></div>`,card=>{
+    const enc=card.querySelector('#auEnc');
+    if(enc)enc.onchange=()=>{card.querySelector('#auPw').hidden=!enc.checked};
+    card.querySelector('#auGo').onclick=async()=>{
+      const doEnc=!!(enc&&enc.checked);let pw=null;
+      if(doEnc){
+        const p1=card.querySelector('#auP1').value,p2=card.querySelector('#auP2').value;
+        if(p1.length<8){toast('パスワードは8文字以上にしてください');return}
+        if(p1!==p2){toast('2つのパスワードが一致しません');return}
+        pw=p1;
+      }
+      let h;
+      try{h=await window.showSaveFilePicker({suggestedName:'指名帳_自動保存.json',types:[{description:'指名帳のデータ',accept:{'application/json':['.json']}}]})}catch(e){return}
+      fileHandle=h;autoName=h.name;await idbPut('kv',h,'autoHandle');
+      S.opts.autoEnc=doEnc;autoPass=pw;autoState='ok';save({silent:true});
+      closeModal();await writeAuto(true);toast('自動保存を始めました');updateStatusBar();if(ui.tab==='set')render();
+    };
+  });
+}
+function resumeModal(){
+  if(!fileHandle){autoSetupModal();return}
+  const needPw=!!S.opts.autoEnc;const conflict=autoState==='conflict';
+  openModal(`<h3>${conflict?'自動保存先が更新されています':'自動保存を再開'}</h3>
+    <p class="small muted">保存先：${esc(autoName)}</p>
+    ${conflict?'<p class="small">別の端末（またはアプリ）がこのファイルを書き換えました。「統合して再開」を選ぶと、ファイルの内容と今のデータを合わせてから保存を続けます。</p>':''}
+    ${needPw&&!autoPass?`<label class="field">自動保存のパスワード<input type="password" id="rsAP" autocomplete="current-password"></label>`:''}
+    <p class="small" id="rsAErr" style="color:var(--seal)" hidden></p>
+    <div class="row">${conflict?'<button class="btn primary" id="rsMerge">統合して再開</button><button class="btn danger" id="rsOver">上書きして再開</button>':'<button class="btn primary" id="rsAGo">再開する</button>'}
+      <button class="btn" id="rsANew">保存先を選び直す</button><button class="btn" data-m="close">あとで</button></div>`,card=>{
+    const err=m=>{const e=card.querySelector('#rsAErr');e.textContent=m;e.hidden=false};
+    card.querySelector('#rsANew').onclick=()=>{closeModal();autoSetupModal()};
+    const prepare=async()=>{
+      let p;try{p=await fileHandle.requestPermission({mode:'readwrite'})}catch(e){p='denied'}
+      if(p!=='granted'){err('ファイルへの書き込みが許可されませんでした。');return null}
+      let pw=autoPass;const inp=card.querySelector('#rsAP');if(inp)pw=inp.value;
+      let fileData=null;
+      try{
+        const txt=await (await fileHandle.getFile()).text();
+        if(txt.trim()){let obj=JSON.parse(txt);if(obj.format==='shimeicho-encrypted'){obj=JSON.parse(await decryptText(obj,pw))}fileData=obj}
+      }catch(e){if(needPw){err('パスワードが違うか、ファイルが壊れています。');return null}}
+      if(needPw)autoPass=pw;
+      return {fileData};
+    };
+    const go=card.querySelector('#rsAGo');
+    if(go)go.onclick=async()=>{const r=await prepare();if(!r)return;closeModal();await writeAuto(false);
+      if(autoState==='conflict'){resumeModal();return}toast('自動保存を再開しました');updateStatusBar()};
+    const mg=card.querySelector('#rsMerge');
+    if(mg)mg.onclick=async()=>{const r=await prepare();if(!r)return;closeModal();
+      if(r.fileData&&Array.isArray(r.fileData.courses))await doMerge(r.fileData);
+      await writeAuto(true);updateStatusBar();toast('統合して自動保存を再開しました')};
+    const ov=card.querySelector('#rsOver');
+    if(ov)armButton(ov,'もう一度押すと上書き',async()=>{const r=await prepare();if(!r)return;closeModal();await writeAuto(true);updateStatusBar();toast('上書きして再開しました')});
+  });
+}
+async function autoOff(){
+  await idbDel('kv','autoHandle');await idbDel('kv','autoSig');
+  fileHandle=null;autoPass=null;autoState='off';autoSig=undefined;autoName='';S.opts.autoEnc=false;save({silent:true});render();toast('自動保存をやめました');
+}
+
+/* ---------- バックアップの知らせ ---------- */
+const hasUnbacked=()=>!!S.changedAt&&(!S.lastBackup||S.changedAt>S.lastBackup);
+const backupAge=()=>S.lastBackup?Math.floor((Date.now()-new Date(S.lastBackup).getTime())/864e5):Infinity;
+function updateStatusBar(){
+  const b=$('#statusBar');if(!b)return;let h='';
+  if(autoState==='needResume')h=`<span>自動保存が止まっています（ブラウザを開き直したあとは再開の操作が必要です）</span><button class="btn small primary" data-s="resume">再開する</button>`;
+  else if(autoState==='conflict')h=`<span>自動保存先のファイルが別の端末で更新されています</span><button class="btn small primary" data-s="resume">確認する</button>`;
+  else if(autoState==='error')h=`<span>自動保存に失敗しました</span><button class="btn small primary" data-s="resume">再開する</button><button class="btn small" data-s="backup">手動でバックアップ</button>`;
+  else if(autoState!=='ok'&&hasUnbacked()){
+    const nrec=S.courses.reduce((a,c)=>a+c.records.length,0);
+    if(S.lastBackup?backupAge()>=S.opts.remindDays:nrec>0)
+      h=`<span>${S.lastBackup?`最後のバックアップから ${backupAge()}日たっています`:'まだバックアップがありません'}</span><button class="btn small primary" data-s="backup">今すぐバックアップ</button>`;
+  }
+  b.innerHTML=h?`<div class="wrap sbar-in">${h}</div>`:'';b.hidden=!h;
+}
+$('#statusBar').addEventListener('click',e=>{const t=e.target.closest('[data-s]');if(!t)return;if(t.dataset.s==='resume')resumeModal();else backupModal()});
+
+load();
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+render();
+updateStatusBar();
+initAutoSave();
+</script>
+</body>
+</html>
